@@ -1,0 +1,25 @@
+# Kernel source and build outputs
+linux-src/
+build/
+out/
+*.deb
+*.ddeb
+*.rpm
+*.tar
+*.tar.gz
+*.tar.xz
+*.log
+*.tmp
+
+# Patch/build byproducts
+*.orig
+*.rej
+.config
+Module.symvers
+modules.order
+
+# Editor and OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
