@@ -1,0 +1,104 @@
+name: Track Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 1 * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: upstream-tracking
+  cancel-in-progress: false
+
+jobs:
+  track:
+    name: Resolve upstream heads
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout dev branch
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y jq git
+
+      - name: Resolve XanMod
+        id: xanmod
+        shell: bash
+        run: bash scripts/resolve-upstream.sh xanmod auto
+
+      - name: Resolve Debian
+        id: debian
+        shell: bash
+        run: bash scripts/resolve-upstream.sh debian auto
+
+      - name: Update upstream state
+        id: update
+        shell: bash
+        run: |
+          old_xanmod_sha="$(jq -r '.xanmod.sha // ""' state/upstream.json)"
+          old_debian_sha="$(jq -r '.debian.sha // ""' state/upstream.json)"
+          tmp="$(mktemp)"
+          jq \
+            --arg xr "${{ steps.xanmod.outputs.resolved_ref }}" \
+            --arg xs "${{ steps.xanmod.outputs.resolved_sha }}" \
+            --arg dr "${{ steps.debian.outputs.resolved_ref }}" \
+            --arg ds "${{ steps.debian.outputs.resolved_sha }}" \
+            '.xanmod.resolved_ref = $xr
+             | .xanmod.sha = $xs
+             | .debian.resolved_ref = $dr
+             | .debian.sha = $ds' \
+            state/upstream.json > "$tmp"
+          mv "$tmp" state/upstream.json
+
+          changed=false
+          xanmod_changed=false
+          debian_changed=false
+          if [[ "$old_xanmod_sha" != "${{ steps.xanmod.outputs.resolved_sha }}" ]]; then
+            changed=true
+            xanmod_changed=true
+          fi
+          if [[ "$old_debian_sha" != "${{ steps.debian.outputs.resolved_sha }}" ]]; then
+            changed=true
+            debian_changed=true
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "xanmod_changed=$xanmod_changed" >> "$GITHUB_OUTPUT"
+          echo "debian_changed=$debian_changed" >> "$GITHUB_OUTPUT"
+
+      - name: Commit state update
+        if: steps.update.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/upstream.json
+          git commit -m "chore: track upstream kernel update"
+          git push origin HEAD:dev
+
+      - name: Dispatch XanMod build
+        if: steps.update.outputs.xanmod_changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run build-kernel.yml --ref dev \
+            -f source=xanmod \
+            -f kernel_ref=auto \
+            -f arch=both \
+            -f build_debs=true
+
+      - name: Dispatch Debian build
+        if: steps.update.outputs.debian_changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run build-kernel.yml --ref dev \
+            -f source=debian \
+            -f kernel_ref=auto \
+            -f arch=both \
+            -f build_debs=true
