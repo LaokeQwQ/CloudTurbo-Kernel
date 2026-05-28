@@ -90,7 +90,8 @@ jobs:
             -f source=xanmod \
             -f kernel_ref=auto \
             -f arch=both \
-            -f build_debs=true
+            -f build_debs=true \
+            -f publish_release=true
 
       - name: Dispatch Debian build
         if: steps.update.outputs.debian_changed == 'true'
@@ -101,4 +102,5 @@ jobs:
             -f source=debian \
             -f kernel_ref=auto \
             -f arch=both \
-            -f build_debs=true
+            -f build_debs=true \
+            -f publish_release=true
