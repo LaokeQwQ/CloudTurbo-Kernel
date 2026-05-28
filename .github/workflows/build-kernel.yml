@@ -1,0 +1,112 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Upstream source
+        required: true
+        type: choice
+        default: xanmod
+        options:
+          - xanmod
+          - debian
+      kernel_ref:
+        description: Upstream branch/ref, or auto
+        required: true
+        type: string
+        default: auto
+      arch:
+        description: Target architecture
+        required: true
+        type: choice
+        default: x86_64
+        options:
+          - x86_64
+          - arm64
+          - both
+      build_debs:
+        description: Produce Debian packages
+        required: true
+        type: choice
+        default: "true"
+        options:
+          - "true"
+          - "false"
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - .github/workflows/build-kernel.yml
+      - scripts/**
+      - config/**
+      - state/upstream.json
+  schedule:
+    - cron: "23 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kernel-build-${{ github.ref }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-${{ inputs.arch || 'x86_64' }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        shell: bash
+        run: |
+          arch="${{ inputs.arch || 'x86_64' }}"
+          case "$arch" in
+            both) echo 'matrix={"arch":["x86_64","arm64"]}' >> "$GITHUB_OUTPUT" ;;
+            x86_64) echo 'matrix={"arch":["x86_64"]}' >> "$GITHUB_OUTPUT" ;;
+            arm64) echo 'matrix={"arch":["arm64"]}' >> "$GITHUB_OUTPUT" ;;
+            *) echo "unsupported arch: $arch" >&2; exit 2 ;;
+          esac
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Checkout CloudTurbo
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential ca-certificates cpio dwarves fakeroot flex git jq \
+            kmod libelf-dev libncurses-dev libssl-dev pahole python3 rsync xz-utils zstd
+          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          fi
+
+      - name: Build kernel
+        shell: bash
+        env:
+          SOURCE: ${{ inputs.source || 'xanmod' }}
+          KERNEL_REF: ${{ inputs.kernel_ref || 'auto' }}
+          TARGET_ARCH: ${{ matrix.arch }}
+          BUILD_DEBS: ${{ inputs.build_debs || 'true' }}
+          LOCALVERSION: -cloudturbo
+        run: bash scripts/build-kernel.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudturbo-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-${{ matrix.arch }}
+          path: out/${{ matrix.arch }}/
+          if-no-files-found: error
+          retention-days: 14
