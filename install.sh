@@ -153,7 +153,7 @@ for asset in rel.get("assets", []):
         continue
     if f"_{arch}.deb" not in name and "_all.deb" not in name:
         continue
-    print(f"{name}\t{asset.get(\"browser_download_url\", \"\")}")
+    print("{}\t{}".format(name, asset.get("browser_download_url", "")))
 ' "$deb_arch" > "${WORK_DIR}/assets.tsv"
   if [[ ! -s "${WORK_DIR}/assets.tsv" ]]; then
     red "Release ${tag} has no .deb assets for ${deb_arch}."
