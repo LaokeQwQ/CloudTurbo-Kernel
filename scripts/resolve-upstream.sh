@@ -19,7 +19,7 @@ esac
 
 if [[ "$requested_ref" == "auto" ]]; then
   if [[ "$source_name" == "xanmod" ]]; then
-    resolved_ref="$((git ls-remote --heads "$repo" || true) \
+    resolved_ref="$(git ls-remote --heads "$repo" \
       | awk '{print $2}' \
       | sed 's#refs/heads/##' \
       | grep -E '^[0-9]+([.][0-9]+)+$' \
@@ -37,9 +37,9 @@ if [[ -z "${resolved_ref:-}" ]]; then
   exit 3
 fi
 
-sha="$((git ls-remote --heads "$repo" "$resolved_ref" || true) | awk '{print $1}' | head -n 1)"
+sha="$(git ls-remote --heads "$repo" "$resolved_ref" | awk '{print $1}' | head -n 1)"
 if [[ -z "$sha" ]]; then
-  sha="$((git ls-remote "$repo" "$resolved_ref" || true) | awk '{print $1}' | head -n 1)"
+  sha="$(git ls-remote "$repo" "$resolved_ref" | awk '{print $1}' | head -n 1)"
 fi
 if [[ -z "$sha" ]]; then
   echo "unable to resolve sha for $repo $resolved_ref" >&2
