@@ -33,11 +33,19 @@ on:
         options:
           - "true"
           - "false"
+      publish_release:
+        description: Publish .deb assets to GitHub Releases
+        required: true
+        type: choice
+        default: "false"
+        options:
+          - "true"
+          - "false"
   schedule:
     - cron: "23 3 * * 1"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: kernel-build-${{ github.ref }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-${{ inputs.arch || 'x86_64' }}
@@ -101,3 +109,63 @@ jobs:
           path: out/${{ matrix.arch }}/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Prepare release metadata
+        id: release
+        if: ${{ inputs.publish_release == 'true' && inputs.build_debs == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          # shellcheck disable=SC1090
+          source "out/${{ matrix.arch }}/metadata.env"
+          set +a
+          safe_ref="$(printf '%s' "$resolved_ref" | tr '/ :' '---' | tr -cd 'A-Za-z0-9._-')"
+          sha7="${resolved_sha:0:7}"
+          tag="cloudturbo-${source}-${safe_ref}-${sha7}"
+          title="CloudTurbo Kernel ${source} ${resolved_ref} (${sha7})"
+          notes="out/${{ matrix.arch }}/release-notes.md"
+          cat > "$notes" <<EOF
+          # ${title}
+
+          - Source: ${source_repo}
+          - Ref: ${resolved_ref}
+          - SHA: ${resolved_sha}
+          - Kernel version: ${kernel_version}
+          - Architecture: ${{ matrix.arch }} (${deb_arch})
+          - Local version: ${localversion}
+
+          Install with:
+
+          \`\`\`bash
+          bash <(curl -fsSL https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
+          \`\`\`
+          EOF
+          {
+            echo "tag=$tag"
+            echo "title=$title"
+            echo "notes=$notes"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        if: ${{ inputs.publish_release == 'true' && inputs.build_debs == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          title="${{ steps.release.outputs.title }}"
+          notes="${{ steps.release.outputs.notes }}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$title" --notes-file "$notes" || true
+          fi
+          for i in {1..12}; do
+            gh release view "$tag" >/dev/null 2>&1 && break
+            sleep 5
+          done
+          gh release upload "$tag" \
+            out/${{ matrix.arch }}/*.deb \
+            out/${{ matrix.arch }}/metadata.env \
+            out/${{ matrix.arch }}/config-${{ matrix.arch }} \
+            --clobber
