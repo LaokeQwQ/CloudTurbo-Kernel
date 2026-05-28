@@ -12,6 +12,67 @@ The repository intentionally stays small: it does not vendor a full kernel tree 
 - Keep the customization auditable through a small config fragment.
 - Use `dev` for automation/testing and `main` for the protected stable branch.
 
+## One-Click Install
+
+Run the installer on a Debian/Ubuntu VPS as root:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
+```
+
+If GitHub access is slow, you can fetch the installer itself through a mirror/proxy:
+
+```bash
+bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
+```
+
+The installer will:
+
+- list compiled CloudTurbo Kernel versions from GitHub Releases;
+- detect the current architecture (`amd64` or `arm64`);
+- ask whether to use a mirror before downloading packages;
+- download the selected `.deb` kernel packages;
+- install the selected version;
+- optionally uninstall old kernels while keeping the running and newly installed kernels;
+- regenerate GRUB;
+- check that the new kernel exists under `/boot`;
+- optionally reboot;
+- after reboot, enable available TCP acceleration features such as `bbrplus` or `bbr` with `fq` pacing.
+
+Direct commands:
+
+```bash
+# Interactive menu
+sudo bash install.sh
+
+# Install/upgrade kernel from published releases
+sudo bash install.sh install
+
+# After reboot: enable BBRPlus/BBR if the running kernel provides it
+sudo bash install.sh tune
+
+# Show current kernel and TCP status
+sudo bash install.sh status
+```
+
+Mirror behavior: before package download, the installer asks whether to use a mirror prefix. If you answer yes and keep the default, release asset URLs are rewritten like this:
+
+```text
+https://github.com/LaokeQwQ/CloudTurbo-Kernel/releases/download/...
+```
+
+becomes:
+
+```text
+https://gh-proxy.org/https://github.com/LaokeQwQ/CloudTurbo-Kernel/releases/download/...
+```
+
+The same style also works for raw GitHub URLs, for example:
+
+```text
+https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh
+```
+
 ## Upstreams
 
 CloudTurbo can build from either source:
@@ -29,12 +90,15 @@ Open **Actions -> Build Kernel -> Run workflow** and choose:
 - `kernel_ref`: `auto` or an explicit branch/ref
 - `arch`: `x86_64`, `arm64`, or `both`
 - `build_debs`: whether to produce Debian packages
+- `publish_release`: whether to publish `.deb` packages to GitHub Releases for the installer
 
-Artifacts contain the final `.config`, build metadata, logs, and `.deb` files when package building is enabled.
+Artifacts contain the final `.config`, build metadata, logs, and `.deb` files when package building is enabled. Published releases are what the one-click installer lists as compiled versions.
 
 ## Upstream Tracking
 
-The **Track Upstream** workflow runs on a schedule and can be started manually. It resolves current upstream heads and updates `state/upstream.json` on the automation branch when an upstream changes. The build workflow can also run on the latest upstream directly without waiting for a state update.
+The **Track Upstream** workflow runs on a schedule and can be started manually. It resolves current upstream heads and updates `state/upstream.json` on the automation branch when an upstream changes. When an upstream changes, it dispatches package builds for x86_64 and arm64 with `publish_release=true`, so the installer can see the new compiled version after the build completes.
+
+The build workflow can also run on the latest upstream directly without waiting for a state update.
 
 ## VPS Defaults
 
