@@ -1,0 +1,14 @@
+{
+  "xanmod": {
+    "repo": "https://gitlab.com/xanmod/linux.git",
+    "ref": "auto",
+    "resolved_ref": "",
+    "sha": ""
+  },
+  "debian": {
+    "repo": "https://salsa.debian.org/kernel-team/linux.git",
+    "ref": "debian/latest",
+    "resolved_ref": "debian/latest",
+    "sha": ""
+  }
+}
