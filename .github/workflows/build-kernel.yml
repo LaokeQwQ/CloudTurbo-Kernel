@@ -90,6 +90,41 @@ jobs:
             kmod libdw-dev libelf-dev libncurses-dev libssl-dev pahole python3 rsync xz-utils zstd
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
             sudo dpkg --add-architecture arm64
+            # GitHub's Ubuntu amd64 runner uses security.ubuntu.com for native packages,
+            # but Ubuntu arm64 packages live on ports.ubuntu.com. Restrict native sources
+            # to amd64 before adding arm64 ports sources to avoid 404s during apt update.
+            sudo python3 - <<'PY'
+          from pathlib import Path
+          for path in Path('/etc/apt/sources.list.d').glob('*.sources'):
+              text = path.read_text()
+              stanzas = [s for s in text.split('\n\n') if s.strip()]
+              output = []
+              for stanza in stanzas:
+                  lines = stanza.splitlines()
+                  if any(line.startswith('Types:') for line in lines) and not any(line.startswith('Architectures:') for line in lines):
+                      new_lines = []
+                      for line in lines:
+                          new_lines.append(line)
+                          if line.startswith('Types:'):
+                              new_lines.append('Architectures: amd64')
+                      lines = new_lines
+                  output.append('\n'.join(lines))
+              path.write_text('\n\n'.join(output) + '\n')
+          for path in [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.list')]:
+              if path.exists():
+                  text = path.read_text()
+                  text = text.replace('deb http', 'deb [arch=amd64] http')
+                  text = text.replace('deb https', 'deb [arch=amd64] https')
+                  path.write_text(text)
+          PY
+            . /etc/os-release
+            codename="${VERSION_CODENAME:-noble}"
+            sudo tee /etc/apt/sources.list.d/ubuntu-arm64-ports.list >/dev/null <<EOF
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename} main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-backports main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-security main restricted universe multiverse
+          EOF
             sudo apt-get update
             sudo apt-get install -y \
               gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libssl-dev:arm64
