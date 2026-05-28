@@ -1,5 +1,7 @@
 # CloudTurbo Kernel
 
+**Language:** English | [简体中文](README.zh-CN.md)
+
 CloudTurbo Kernel is a VPS-focused custom Linux kernel build repository. It follows upstream Linux kernel sources and automatically builds reproducible kernel packages for x86_64 and arm64.
 
 The repository intentionally stays small: it does not vendor a full kernel tree and does not carry experimental third-party patch stacks. GitHub Actions resolves the selected upstream branch, fetches the source, applies CloudTurbo's VPS-oriented kernel config fragment, and builds artifacts.
