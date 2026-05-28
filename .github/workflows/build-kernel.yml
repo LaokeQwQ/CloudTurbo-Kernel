@@ -33,15 +33,6 @@ on:
         options:
           - "true"
           - "false"
-  push:
-    branches:
-      - main
-      - dev
-    paths:
-      - .github/workflows/build-kernel.yml
-      - scripts/**
-      - config/**
-      - state/upstream.json
   schedule:
     - cron: "23 3 * * 1"
 
