@@ -83,7 +83,7 @@ curl_json() {
 
 list_releases() {
   local deb_arch="$1"
-  curl_json "${API_BASE}/releases?per_page=100" | python3 - "$deb_arch" <<'PY'
+  curl_json "${API_BASE}/releases?per_page=100" | python3 -c '
 import json, sys
 arch = sys.argv[1]
 try:
@@ -107,7 +107,7 @@ if not rows:
     sys.exit(4)
 for i, row in enumerate(rows, 1):
     print("\t".join([str(i), *map(str, row)]))
-PY
+' "$deb_arch"
 }
 
 select_release() {
@@ -143,7 +143,7 @@ download_release_assets() {
   mkdir -p "$WORK_DIR"
   configure_mirror
   blue "Fetching release metadata: ${tag}"
-  curl_json "${API_BASE}/releases/tags/${tag}" | python3 - "$deb_arch" > "${WORK_DIR}/assets.tsv" <<'PY'
+  curl_json "${API_BASE}/releases/tags/${tag}" | python3 -c '
 import json, sys
 arch = sys.argv[1]
 rel = json.load(sys.stdin)
@@ -153,8 +153,8 @@ for asset in rel.get("assets", []):
         continue
     if f"_{arch}.deb" not in name and "_all.deb" not in name:
         continue
-    print(f"{name}\t{asset.get('browser_download_url', '')}")
-PY
+    print(f"{name}\t{asset.get(\"browser_download_url\", \"\")}")
+' "$deb_arch" > "${WORK_DIR}/assets.tsv"
   if [[ ! -s "${WORK_DIR}/assets.tsv" ]]; then
     red "Release ${tag} has no .deb assets for ${deb_arch}."
     exit 1
