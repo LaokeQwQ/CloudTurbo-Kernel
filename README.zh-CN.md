@@ -28,7 +28,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/m
 bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
 ```
 
-安装脚本启动时会先让你选择 English 或简体中文。也可以通过 `CLOUDTURBO_LANG=zh` 或 `CLOUDTURBO_LANG=en` 跳过选择。安装脚本会：
+安装脚本启动时会显示脚本版本号和发布日期，每次进入交互步骤前会自动清屏，并让你选择 English 或简体中文。也可以通过 `CLOUDTURBO_LANG=zh` 或 `CLOUDTURBO_LANG=en` 跳过选择。安装脚本支持从 main 分支自更新。安装脚本会：
 
 - 从 GitHub Releases 自动列出已编译的 CloudTurbo Kernel 版本；
 - 自动识别当前架构（`amd64` 或 `arm64`）；
@@ -58,6 +58,9 @@ sudo bash install.sh tune
 
 # 查看当前内核与 TCP 状态
 sudo bash install.sh status
+
+# 更新安装脚本自身
+sudo bash install.sh self-update
 ```
 
 镜像站逻辑：下载安装包前，脚本会询问是否使用镜像前缀。如果选择是并保留默认值，Release 资源 URL 会按如下方式重写：
