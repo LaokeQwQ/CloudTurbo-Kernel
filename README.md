@@ -54,8 +54,13 @@ CLOUDTURBO_LANG=zh sudo -E bash install.sh
 # Install/upgrade kernel from published releases
 sudo bash install.sh install
 
-# After reboot: enable BBRPlus/BBR if the running kernel provides it
+# After reboot: choose BBRPlus, BBR2, BBR, or another available strategy interactively
 sudo bash install.sh tune
+
+# Or enable a specific strategy directly and verify it took effect
+sudo bash install.sh bbrplus
+sudo bash install.sh bbr2
+sudo bash install.sh bbr
 
 # Show current kernel and TCP status
 sudo bash install.sh status
