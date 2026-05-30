@@ -163,7 +163,7 @@ select_release() {
   info "Available CloudTurbo Kernel releases for ${deb_arch}:" "适用于 ${deb_arch} 的 CloudTurbo Kernel 已编译版本："
   printf '%s\n' "$release_table" | awk -F '\t' '{printf "  %2s) %-44s %s assets  %s\n", $1, $2, $5, $4}' >&2
   while true; do
-    read -r -p "$(msg 'Select a release number' '请选择版本编号'): " choice
+    printf '%s' "$(msg 'Select a release number' '请选择版本编号'): " >&2; read -r choice
     if [[ "$choice" =~ ^[0-9]+$ ]] && printf '%s\n' "$release_table" | awk -F '\t' '{print $1}' | grep -qx "$choice"; then
       printf '%s\n' "$release_table" | awk -F '\t' -v n="$choice" '$1 == n {print $2; exit}'
       return 0
