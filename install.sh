@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.1.0"
+SCRIPT_VERSION="1.1.1"
 SCRIPT_RELEASE_DATE="2026-05-30"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
@@ -30,9 +30,9 @@ clear_interactive() {
 }
 
 header() {
-  printf 'CloudTurbo Kernel installer v%s (%s)\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE"
+  printf 'CloudTurbo Kernel installer v%s (%s)\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE" >&2
   if is_zh; then
-    printf 'CloudTurbo Kernel 安装器 v%s（发布于 %s）\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE"
+    printf 'CloudTurbo Kernel 安装器 v%s（发布于 %s）\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE" >&2
   fi
 }
 
@@ -183,7 +183,7 @@ select_release() {
   set -e
   clear_interactive
   header
-  printf '\n'
+  printf '\n' >&2
   if [[ $rc -ne 0 || -z "$release_table" ]]; then
     fail "No compiled CloudTurbo Kernel release assets were found for ${deb_arch}." "没有找到适用于 ${deb_arch} 的已编译 CloudTurbo Kernel 版本。"
     warn "Build one first from GitHub Actions: Build Kernel -> build_debs=true -> publish_release=true." "请先在 GitHub Actions 中构建：Build Kernel -> build_debs=true -> publish_release=true。"
