@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+SCRIPT_VERSION="1.1.0"
+SCRIPT_RELEASE_DATE="2026-05-30"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
 API_BASE="https://api.github.com/repos/${OWNER}/${REPO}"
 RAW_INSTALL_URL="https://raw.githubusercontent.com/${OWNER}/${REPO}/main/install.sh"
+SELF_INSTALL_PATH="/usr/local/bin/cloudturbo-kernel"
 WORK_DIR="${WORK_DIR:-/tmp/cloudturbo-kernel-installer}"
 SYSCTL_FILE="/etc/sysctl.d/99-cloudturbo-tcp.conf"
 DEFAULT_MIRROR_PREFIX="https://gh-proxy.org/"
@@ -22,6 +25,22 @@ ok() { green "$(msg "$1" "$2")" >&2; }
 warn() { yellow "$(msg "$1" "$2")" >&2; }
 fail() { red "$(msg "$1" "$2")" >&2; }
 
+clear_interactive() {
+  [[ -t 1 ]] && command -v clear >/dev/null 2>&1 && clear || true
+}
+
+header() {
+  printf 'CloudTurbo Kernel installer v%s (%s)\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE"
+  if is_zh; then
+    printf 'CloudTurbo Kernel 安装器 v%s（发布于 %s）\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE"
+  fi
+}
+
+pause_prompt() {
+  [[ -t 0 ]] || return 0
+  read -r -p "$(msg 'Press Enter to continue...' '按 Enter 继续...')" _ || true
+}
+
 choose_language() {
   case "${LANGUAGE:-}" in
     en|zh|zh-CN) return 0 ;;
@@ -30,7 +49,9 @@ choose_language() {
     LANGUAGE="en"
     return 0
   fi
-  printf '\nSelect language / 选择语言\n  1) English\n  2) 简体中文\n'
+  clear_interactive
+  printf 'CloudTurbo Kernel installer v%s (%s)\n\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE"
+  printf 'Select language / 选择语言\n  1) English\n  2) 简体中文\n'
   local choice
   read -r -p 'Choice / 请选择 [1]: ' choice || true
   case "${choice:-1}" in
@@ -87,7 +108,9 @@ ask_yes_no() {
   local en="$1"
   local zh="$2"
   local default="${3:-N}"
+  local do_clear="${4:-1}"
   local answer suffix
+  [[ "$do_clear" == "1" ]] && clear_interactive && header && printf '\n'
   suffix="[y/N]"
   [[ "$default" == "Y" ]] && suffix="[Y/n]"
   read -r -p "$(msg "$en" "$zh") $suffix " answer || true
@@ -97,12 +120,16 @@ ask_yes_no() {
 
 configure_mirror() {
   MIRROR_PREFIX=""
-  if ask_yes_no "Use a GitHub mirror/proxy before downloading assets?" "下载前是否使用 GitHub 镜像/代理？" "N"; then
+  clear_interactive
+  header
+  printf '\n'
+  if ask_yes_no "Use a GitHub mirror/proxy before downloading assets?" "下载前是否使用 GitHub 镜像/代理？" "N" "0"; then
     read -r -p "$(msg 'Mirror prefix' '镜像前缀') [${DEFAULT_MIRROR_PREFIX}] " MIRROR_PREFIX || true
     MIRROR_PREFIX="${MIRROR_PREFIX:-$DEFAULT_MIRROR_PREFIX}"
     MIRROR_PREFIX="${MIRROR_PREFIX%/}/"
     warn "Download mirror enabled: ${MIRROR_PREFIX}<original-url>" "已启用下载镜像：${MIRROR_PREFIX}<原始URL>"
     warn "Example: ${MIRROR_PREFIX}${RAW_INSTALL_URL}" "示例：${MIRROR_PREFIX}${RAW_INSTALL_URL}"
+    pause_prompt
   fi
 }
 
@@ -154,6 +181,9 @@ select_release() {
   release_table="$(list_releases "$deb_arch")"
   rc=$?
   set -e
+  clear_interactive
+  header
+  printf '\n'
   if [[ $rc -ne 0 || -z "$release_table" ]]; then
     fail "No compiled CloudTurbo Kernel release assets were found for ${deb_arch}." "没有找到适用于 ${deb_arch} 的已编译 CloudTurbo Kernel 版本。"
     warn "Build one first from GitHub Actions: Build Kernel -> build_debs=true -> publish_release=true." "请先在 GitHub Actions 中构建：Build Kernel -> build_debs=true -> publish_release=true。"
@@ -163,7 +193,8 @@ select_release() {
   info "Available CloudTurbo Kernel releases for ${deb_arch}:" "适用于 ${deb_arch} 的 CloudTurbo Kernel 已编译版本："
   printf '%s\n' "$release_table" | awk -F '\t' '{printf "  %2s) %-44s %s assets  %s\n", $1, $2, $5, $4}' >&2
   while true; do
-    printf '%s' "$(msg 'Select a release number' '请选择版本编号'): " >&2; read -r choice
+    printf '%s' "$(msg 'Select a release number' '请选择版本编号'): " >&2
+    read -r choice
     if [[ "$choice" =~ ^[0-9]+$ ]] && printf '%s\n' "$release_table" | awk -F '\t' '{print $1}' | grep -qx "$choice"; then
       printf '%s\n' "$release_table" | awk -F '\t' -v n="$choice" '$1 == n {print $2; exit}'
       return 0
@@ -178,6 +209,9 @@ download_release_assets() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
   configure_mirror
+  clear_interactive
+  header
+  printf '\n'
   info "Fetching release metadata: ${tag}" "正在获取版本元数据：${tag}"
   curl_json "${API_BASE}/releases/tags/${tag}" | python3 -c '
 import json, sys
@@ -269,6 +303,9 @@ purge_old_kernels() {
 
 update_bootloader() {
   need_root
+  clear_interactive
+  header
+  printf '\n'
   info "Regenerating GRUB configuration..." "正在重新生成 GRUB 配置..."
   if command -v update-grub >/dev/null 2>&1; then
     update-grub
@@ -337,6 +374,9 @@ try_load_cc_modules() {
 
 enable_tcp_features() {
   need_root
+  clear_interactive
+  header
+  printf '\n'
   try_load_cc_modules
   local cc_list choices=() cc selected num
   cc_list="$(available_cc)"
@@ -397,6 +437,9 @@ EOF
 }
 
 show_status() {
+  clear_interactive
+  header
+  printf '\n'
   info "CloudTurbo Kernel status" "CloudTurbo Kernel 状态"
   printf '  %s: %s\n' "$(msg 'Running kernel' '当前内核')" "$(uname -r)"
   printf '  %s: %s (%s)\n' "$(msg 'Architecture' '架构')" "$(uname -m)" "$(arch_deb)"
@@ -404,10 +447,65 @@ show_status() {
   sysctl net.ipv4.tcp_congestion_control net.core.default_qdisc 2>/dev/null || true
   printf '\n%s\n' "$(msg 'Installed kernel images:' '已安装内核镜像：')"
   dpkg-query -W -f='  ${Package}\t${Version}\n' 'linux-image-*' 2>/dev/null | grep -E '^  linux-image-[0-9]' || true
+  pause_prompt
+}
+
+script_source_path() {
+  local src="${BASH_SOURCE[0]}"
+  if [[ -n "$src" && -f "$src" && -w "$src" ]]; then
+    readlink -f "$src" 2>/dev/null || printf '%s\n' "$src"
+  else
+    printf '%s\n' "$SELF_INSTALL_PATH"
+  fi
+}
+
+extract_remote_meta() {
+  local file="$1"
+  local remote_version remote_date
+  remote_version="$(grep -E '^SCRIPT_VERSION=' "$file" | head -n1 | cut -d= -f2- | tr -d '"')"
+  remote_date="$(grep -E '^SCRIPT_RELEASE_DATE=' "$file" | head -n1 | cut -d= -f2- | tr -d '"')"
+  printf '%s\t%s\n' "$remote_version" "$remote_date"
+}
+
+self_update() {
+  need_root
+  clear_interactive
+  header
+  printf '\n'
+  configure_mirror
+  mkdir -p "$WORK_DIR"
+  local tmp target final_url meta remote_version remote_date
+  tmp="${WORK_DIR}/install.sh.new"
+  final_url="$(mirror_url "$RAW_INSTALL_URL")"
+  info "Downloading latest installer script..." "正在下载最新安装脚本..."
+  curl -fL --retry 5 --retry-delay 2 -o "$tmp" "$final_url"
+  chmod +x "$tmp"
+  meta="$(extract_remote_meta "$tmp")"
+  remote_version="${meta%%$'\t'*}"
+  remote_date="${meta#*$'\t'}"
+  info "Current script: v${SCRIPT_VERSION} (${SCRIPT_RELEASE_DATE})" "当前脚本：v${SCRIPT_VERSION}（${SCRIPT_RELEASE_DATE}）"
+  info "Remote script:  v${remote_version:-unknown} (${remote_date:-unknown})" "远端脚本：v${remote_version:-unknown}（${remote_date:-unknown}）"
+  if [[ "${remote_version:-}" == "$SCRIPT_VERSION" && "${remote_date:-}" == "$SCRIPT_RELEASE_DATE" ]]; then
+    if ! ask_yes_no "The installer is already up to date. Reinstall it anyway?" "安装脚本已是最新，仍然重新安装吗？" "N"; then
+      warn "Self-update skipped." "已跳过自更新。"
+      return 0
+    fi
+  fi
+  target="$(script_source_path)"
+  install -m 0755 "$tmp" "$target"
+  ok "Installer updated at ${target}." "安装脚本已更新到 ${target}。"
+  if [[ "$target" == "$SELF_INSTALL_PATH" ]]; then
+    ok "You can run it later with: ${SELF_INSTALL_PATH}" "之后可通过以下命令运行：${SELF_INSTALL_PATH}"
+  fi
+  if ask_yes_no "Restart the updated installer now?" "现在重新启动新版安装脚本吗？" "Y"; then
+    exec "$target" menu
+  fi
 }
 
 menu() {
   while true; do
+    clear_interactive
+    header
     if is_zh; then
       cat <<'EOF'
 
@@ -416,6 +514,7 @@ CloudTurbo Kernel 安装器
   2) 重启后启用 TCP 加速（可用时启用 BBRPlus/BBR）
   3) 重新生成 GRUB
   4) 查看内核/TCP 状态
+  5) 更新安装脚本
   0) 退出
 EOF
       read -r -p '请选择操作: ' opt
@@ -427,6 +526,7 @@ CloudTurbo Kernel installer
   2) Enable TCP acceleration after reboot (BBRPlus/BBR when available)
   3) Regenerate GRUB
   4) Show kernel/TCP status
+  5) Update installer script
   0) Exit
 EOF
       read -r -p 'Choose an option: ' opt
@@ -434,10 +534,11 @@ EOF
     case "$opt" in
       1) install_kernel_flow ;;
       2) enable_tcp_features ;;
-      3) update_bootloader ;;
+      3) update_bootloader; pause_prompt ;;
       4) show_status ;;
+      5) self_update ;;
       0) exit 0 ;;
-      *) warn "Invalid option." "选择无效。" ;;
+      *) warn "Invalid option." "选择无效。"; pause_prompt ;;
     esac
   done
 }
@@ -448,14 +549,17 @@ case "${1:-menu}" in
   tune|bbr|enable-bbr) enable_tcp_features ;;
   status) show_status ;;
   grub) update_bootloader ;;
+  self-update|update|update-script) self_update ;;
   menu) menu ;;
   *)
     cat <<EOF
-Usage: $0 [menu|install|tune|status|grub]
+CloudTurbo Kernel installer v${SCRIPT_VERSION} (${SCRIPT_RELEASE_DATE})
+Usage: $0 [menu|install|tune|status|grub|self-update]
 
 Examples:
   bash $0 install
   CLOUDTURBO_LANG=zh bash $0 tune
+  sudo $0 self-update
 EOF
     exit 2
     ;;
