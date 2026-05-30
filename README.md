@@ -28,7 +28,7 @@ If GitHub access is slow, you can fetch the installer itself through a mirror/pr
 bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
 ```
 
-At startup the installer lets you choose English or Simplified Chinese. You can also skip the prompt with `CLOUDTURBO_LANG=zh` or `CLOUDTURBO_LANG=en`. The installer will:
+At startup the installer shows its script version and release date, clears the screen before each interactive step, and lets you choose English or Simplified Chinese. You can also skip the prompt with `CLOUDTURBO_LANG=zh` or `CLOUDTURBO_LANG=en`. The installer supports self-update from the main branch. It will:
 
 - list compiled CloudTurbo Kernel versions from GitHub Releases;
 - detect the current architecture (`amd64` or `arm64`);
@@ -58,6 +58,9 @@ sudo bash install.sh tune
 
 # Show current kernel and TCP status
 sudo bash install.sh status
+
+# Update the installer script itself
+sudo bash install.sh self-update
 ```
 
 Mirror behavior: before package download, the installer asks whether to use a mirror prefix. If you answer yes and keep the default, release asset URLs are rewritten like this:
