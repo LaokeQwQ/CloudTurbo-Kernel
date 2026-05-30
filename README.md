@@ -28,7 +28,7 @@ If GitHub access is slow, you can fetch the installer itself through a mirror/pr
 bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
 ```
 
-The installer will:
+At startup the installer lets you choose English or Simplified Chinese. You can also skip the prompt with `CLOUDTURBO_LANG=zh` or `CLOUDTURBO_LANG=en`. The installer will:
 
 - list compiled CloudTurbo Kernel versions from GitHub Releases;
 - detect the current architecture (`amd64` or `arm64`);
@@ -46,6 +46,9 @@ Direct commands:
 ```bash
 # Interactive menu
 sudo bash install.sh
+
+# Force Simplified Chinese UI
+CLOUDTURBO_LANG=zh sudo -E bash install.sh
 
 # Install/upgrade kernel from published releases
 sudo bash install.sh install
