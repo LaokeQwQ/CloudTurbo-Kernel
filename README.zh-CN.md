@@ -54,8 +54,13 @@ CLOUDTURBO_LANG=zh sudo -E bash install.sh
 # 从已发布版本安装/升级内核
 sudo bash install.sh install
 
-# 重启进入新内核后：启用 BBRPlus/BBR 等可用特性
+# 重启进入新内核后：交互选择 BBRPlus、BBR2、BBR 或其他可用策略
 sudo bash install.sh tune
+
+# 或直接启用指定策略，并验证是否完全生效
+sudo bash install.sh bbrplus
+sudo bash install.sh bbr2
+sudo bash install.sh bbr
 
 # 查看当前内核与 TCP 状态
 sudo bash install.sh status
