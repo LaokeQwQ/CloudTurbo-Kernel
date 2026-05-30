@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_name="${SOURCE:-xanmod}"
 kref="${KERNEL_REF:-auto}"
 target_arch="${TARGET_ARCH:-x86_64}"
+use_ccache="${USE_CCACHE:-auto}"
 build_debs="${BUILD_DEBS:-true}"
 localversion="${LOCALVERSION:--cloudturbo}"
 jobs="${JOBS:-$(nproc)}"
@@ -45,6 +46,12 @@ case "$target_arch" in
     image_target="Image"
     image_path="arch/arm64/boot/Image"
     cross_compile="aarch64-linux-gnu-"
+    if [[ "$use_ccache" != "false" ]] && command -v ccache >/dev/null 2>&1; then
+      export CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
+      export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-5G}"
+      ccache --set-config=max_size="$CCACHE_MAXSIZE" >/dev/null 2>&1 || true
+      cross_compile="ccache aarch64-linux-gnu-"
+    fi
     deb_arch="arm64"
     ;;
   *)
@@ -87,6 +94,10 @@ else
   if [[ -f "$image_path" ]]; then
     cp "$image_path" "$out_dir/"
   fi
+fi
+
+if command -v ccache >/dev/null 2>&1; then
+  ccache -s || true
 fi
 
 echo "Artifacts written to $out_dir"
