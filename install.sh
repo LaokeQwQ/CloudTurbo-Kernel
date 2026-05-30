@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.2.0"
+SCRIPT_VERSION="1.2.1"
 SCRIPT_RELEASE_DATE="2026-05-30"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
@@ -403,15 +403,49 @@ install_kernel_flow() {
 
 available_cc() { sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || true; }
 
+cc_is_available() {
+  local cc_list="$1"
+  local cc="$2"
+  printf '%s\n' "$cc_list" | tr ' ' '\n' | grep -qx "$cc"
+}
+
 try_load_cc_modules() {
   modprobe tcp_bbrplus 2>/dev/null || true
+  modprobe tcp_bbr2 2>/dev/null || true
   modprobe tcp_bbr 2>/dev/null || true
   modprobe brutal 2>/dev/null || true
   modprobe tcp_brutal 2>/dev/null || true
 }
 
+verify_tcp_strategy() {
+  local selected="$1"
+  local cc_list actual_cc actual_qdisc
+  try_load_cc_modules
+  cc_list="$(available_cc)"
+  if ! cc_is_available "$cc_list" "$selected"; then
+    fail "Selected congestion control is no longer available: ${selected}" "选中的拥塞控制当前不可用：${selected}"
+    warn "Available congestion controls: ${cc_list:-unknown}" "当前可用拥塞控制：${cc_list:-unknown}"
+    exit 1
+  fi
+
+  info "Applying and verifying TCP strategy: ${selected} + fq" "正在应用并验证 TCP 策略：${selected} + fq"
+  sysctl --system
+  actual_cc="$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)"
+  actual_qdisc="$(sysctl -n net.core.default_qdisc 2>/dev/null || true)"
+  if [[ "$actual_cc" != "$selected" || "$actual_qdisc" != "fq" ]]; then
+    fail "TCP strategy did not fully take effect." "TCP 策略未完全生效。"
+    warn "Expected: tcp_congestion_control=${selected}, default_qdisc=fq" "期望值：tcp_congestion_control=${selected}, default_qdisc=fq"
+    warn "Actual:   tcp_congestion_control=${actual_cc:-unknown}, default_qdisc=${actual_qdisc:-unknown}" "实际值：tcp_congestion_control=${actual_cc:-unknown}, default_qdisc=${actual_qdisc:-unknown}"
+    warn "Check for conflicting sysctl files that override ${SYSCTL_FILE}." "请检查是否有其他 sysctl 配置覆盖了 ${SYSCTL_FILE}。"
+    exit 1
+  fi
+  ok "TCP strategy is active: ${selected} + fq" "TCP 策略已完全生效：${selected} + fq"
+  sysctl net.ipv4.tcp_congestion_control net.core.default_qdisc
+}
+
 enable_tcp_features() {
   need_root
+  local requested="${1:-}"
   clear_interactive
   header
   printf '\n'
@@ -419,32 +453,49 @@ enable_tcp_features() {
   local cc_list choices=() cc selected num
   cc_list="$(available_cc)"
   info "Available congestion controls: ${cc_list:-unknown}" "可用拥塞控制算法：${cc_list:-unknown}"
-  for cc in bbrplus bbr brutal cubic; do
-    if printf '%s\n' "$cc_list" | tr ' ' '\n' | grep -qx "$cc"; then choices+=("$cc"); fi
+  for cc in bbrplus bbr2 bbr brutal cubic; do
+    if cc_is_available "$cc_list" "$cc"; then choices+=("$cc"); fi
   done
   if [[ ${#choices[@]} -eq 0 ]]; then
     fail "No supported congestion control found. Is the new kernel running?" "没有找到支持的拥塞控制算法。是否已经重启进入新内核？"
     exit 1
   fi
-  info "Select TCP congestion control:" "请选择 TCP 拥塞控制算法："
-  local i=1
-  for cc in "${choices[@]}"; do
-    if [[ "$cc" == "brutal" ]]; then
-      printf '  %d) %s (%s)\n' "$i" "$cc" "$(msg 'advanced; only use if your software supports TCP Brutal params' '高级选项；仅在应用支持 TCP Brutal 参数时使用')" >&2
-    else
-      printf '  %d) %s\n' "$i" "$cc" >&2
+
+  if [[ -n "$requested" ]]; then
+    case "$requested" in
+      bbrplus|bbr2|bbr|brutal|cubic) ;;
+      *) fail "Unsupported TCP strategy request: ${requested}" "不支持的 TCP 策略请求：${requested}"; exit 1 ;;
+    esac
+    if ! cc_is_available "$cc_list" "$requested"; then
+      fail "Requested congestion control is not available: ${requested}" "请求的拥塞控制当前不可用：${requested}"
+      warn "Available congestion controls: ${cc_list:-unknown}" "当前可用拥塞控制：${cc_list:-unknown}"
+      exit 1
     fi
-    i=$((i+1))
-  done
-  while true; do
-    read -r -p "$(msg 'Choice [1]' '选择 [1]'): " num
-    num="${num:-1}"
-    if [[ "$num" =~ ^[0-9]+$ && "$num" -ge 1 && "$num" -le ${#choices[@]} ]]; then
-      selected="${choices[$((num-1))]}"
-      break
-    fi
-    warn "Invalid selection." "选择无效。"
-  done
+    selected="$requested"
+    ok "Selected TCP strategy: ${selected}" "已选择 TCP 策略：${selected}"
+  else
+    info "Select TCP congestion control:" "请选择 TCP 拥塞控制算法："
+    local i=1
+    for cc in "${choices[@]}"; do
+      case "$cc" in
+        bbrplus) printf '  %d) %s (%s)\n' "$i" "$cc" "$(msg 'BBRPlus' 'BBRPlus')" >&2 ;;
+        bbr2) printf '  %d) %s (%s)\n' "$i" "$cc" "$(msg 'BBRv2/BBR2 when provided by the running kernel' '当前内核提供的 BBRv2/BBR2')" >&2 ;;
+        bbr) printf '  %d) %s (%s)\n' "$i" "$cc" "$(msg 'BBR/BBRv3 when provided as bbr by the running kernel' '当前内核以 bbr 暴露的 BBR/BBRv3')" >&2 ;;
+        brutal) printf '  %d) %s (%s)\n' "$i" "$cc" "$(msg 'advanced; only use if your software supports TCP Brutal params' '高级选项；仅在应用支持 TCP Brutal 参数时使用')" >&2 ;;
+        *) printf '  %d) %s\n' "$i" "$cc" >&2 ;;
+      esac
+      i=$((i+1))
+    done
+    while true; do
+      read -r -p "$(msg 'Choice [1]' '选择 [1]'): " num
+      num="${num:-1}"
+      if [[ "$num" =~ ^[0-9]+$ && "$num" -ge 1 && "$num" -le ${#choices[@]} ]]; then
+        selected="${choices[$((num-1))]}"
+        break
+      fi
+      warn "Invalid selection." "选择无效。"
+    done
+  fi
 
   if [[ "$selected" == "brutal" ]]; then
     warn "TCP Brutal is usually application-selected, not a safe global default." "TCP Brutal 通常应由应用选择，不建议作为全局默认值。"
@@ -469,11 +520,8 @@ net.ipv4.tcp_keepalive_probes = 5
 net.core.somaxconn = 65535
 net.core.netdev_max_backlog = 250000
 EOF
-  sysctl --system
-  ok "Enabled ${selected} with fq pacing." "已启用 ${selected} 和 fq pacing。"
-  sysctl net.ipv4.tcp_congestion_control net.core.default_qdisc
+  verify_tcp_strategy "$selected"
 }
-
 show_status() {
   clear_interactive
   header
@@ -549,7 +597,7 @@ menu() {
 
 CloudTurbo Kernel 安装器
   1) 从 GitHub Releases 安装/升级 CloudTurbo Kernel
-  2) 重启后启用 TCP 加速（可用时启用 BBRPlus/BBR）
+  2) 重启后选择并启用 TCP 策略（BBRPlus / BBR2 / BBR）
   3) 重新生成 GRUB
   4) 查看内核/TCP 状态
   5) 更新安装脚本
@@ -561,7 +609,7 @@ EOF
 
 CloudTurbo Kernel installer
   1) Install/upgrade CloudTurbo Kernel from GitHub Releases
-  2) Enable TCP acceleration after reboot (BBRPlus/BBR when available)
+  2) Select TCP strategy after reboot (BBRPlus / BBR2 / BBR)
   3) Regenerate GRUB
   4) Show kernel/TCP status
   5) Update installer script
@@ -584,7 +632,11 @@ EOF
 choose_language
 case "${1:-menu}" in
   install) install_kernel_flow ;;
-  tune|bbr|enable-bbr) enable_tcp_features ;;
+  tune|tcp|enable-tcp) enable_tcp_features ;;
+  bbr|bbrplus|bbr2|brutal|cubic) enable_tcp_features "$1" ;;
+  enable-bbr) enable_tcp_features bbr ;;
+  enable-bbrplus) enable_tcp_features bbrplus ;;
+  enable-bbr2) enable_tcp_features bbr2 ;;
   status) show_status ;;
   grub) update_bootloader ;;
   self-update|update|update-script) self_update ;;
@@ -592,11 +644,14 @@ case "${1:-menu}" in
   *)
     cat <<EOF
 CloudTurbo Kernel installer v${SCRIPT_VERSION} (${SCRIPT_RELEASE_DATE})
-Usage: $0 [menu|install|tune|status|grub|self-update]
+Usage: $0 [menu|install|tune|bbr|bbrplus|bbr2|status|grub|self-update]
 
 Examples:
   bash $0 install
   CLOUDTURBO_LANG=zh bash $0 tune
+  sudo $0 bbrplus
+  sudo $0 bbr2
+  sudo $0 bbr
   sudo $0 self-update
 EOF
     exit 2
