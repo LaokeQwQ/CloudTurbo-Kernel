@@ -28,7 +28,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/m
 bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
 ```
 
-安装脚本会：
+安装脚本启动时会先让你选择 English 或简体中文。也可以通过 `CLOUDTURBO_LANG=zh` 或 `CLOUDTURBO_LANG=en` 跳过选择。安装脚本会：
 
 - 从 GitHub Releases 自动列出已编译的 CloudTurbo Kernel 版本；
 - 自动识别当前架构（`amd64` 或 `arm64`）；
@@ -46,6 +46,9 @@ bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQw
 ```bash
 # 交互式菜单
 sudo bash install.sh
+
+# 强制使用中文界面
+CLOUDTURBO_LANG=zh sudo -E bash install.sh
 
 # 从已发布版本安装/升级内核
 sudo bash install.sh install
