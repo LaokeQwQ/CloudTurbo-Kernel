@@ -33,7 +33,8 @@ At startup the installer shows its script version and release date, clears the s
 - list compiled CloudTurbo Kernel versions from GitHub Releases;
 - detect the current architecture (`amd64` or `arm64`);
 - ask whether to use a mirror before downloading packages;
-- download the selected `.deb` kernel packages;
+- download the selected .deb kernel packages;
+- download MD5, SHA1, SHA256, and SHA512 checksum manifests and verify package checksums before installation;
 - install the selected version;
 - optionally uninstall old kernels while keeping the running and newly installed kernels;
 - regenerate GRUB;
@@ -100,7 +101,7 @@ Open **Actions -> Build Kernel -> Run workflow** and choose:
 - `build_debs`: whether to produce Debian packages
 - `publish_release`: whether to publish `.deb` packages to GitHub Releases for the installer
 
-Artifacts contain the final `.config`, build metadata, logs, and `.deb` files when package building is enabled. Published releases are what the one-click installer lists as compiled versions.
+Artifacts contain the final `.config`, build metadata, logs, checksum manifests, and `.deb` files when package building is enabled. Published releases are what the one-click installer lists as compiled versions. Release packages include MD5, SHA1, SHA256, and SHA512 manifests, and the installer verifies them before installation. arm64 builds use ccache to speed up repeated cross-compilation when a cache is available.
 
 ## Upstream Tracking
 
