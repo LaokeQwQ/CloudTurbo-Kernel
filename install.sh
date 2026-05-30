@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.1.1"
+SCRIPT_VERSION="1.1.2"
 SCRIPT_RELEASE_DATE="2026-05-30"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
@@ -352,7 +352,12 @@ install_kernel_flow() {
   ensure_runtime_packages
   local deb_arch tag versions
   deb_arch="$(arch_deb)"
-  tag="$(select_release "$deb_arch")"
+  tag="$(select_release "$deb_arch" | awk 'NF {last=$0} END {print last}')"
+  tag="$(printf '%s' "$tag" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  if [[ ! "$tag" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    fail "Invalid release tag selected: ${tag}" "选择到的版本 tag 无效：${tag}"
+    exit 1
+  fi
   warn "Selected release: ${tag}" "已选择版本：${tag}"
   download_release_assets "$tag" "$deb_arch"
   install_downloaded_debs
