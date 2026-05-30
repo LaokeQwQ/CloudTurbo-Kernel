@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.2.1"
+SCRIPT_VERSION="1.2.2"
 SCRIPT_RELEASE_DATE="2026-05-30"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
@@ -597,10 +597,13 @@ menu() {
 
 CloudTurbo Kernel 安装器
   1) 从 GitHub Releases 安装/升级 CloudTurbo Kernel
-  2) 重启后选择并启用 TCP 策略（BBRPlus / BBR2 / BBR）
-  3) 重新生成 GRUB
-  4) 查看内核/TCP 状态
-  5) 更新安装脚本
+  2) 重启后启用 BBR
+  3) 重启后启用 BBRPlus
+  4) 重启后启用 BBR2
+  5) 交互选择 TCP 策略
+  6) 重新生成 GRUB
+  7) 查看内核/TCP 状态
+  8) 更新安装脚本
   0) 退出
 EOF
       read -r -p '请选择操作: ' opt
@@ -609,20 +612,26 @@ EOF
 
 CloudTurbo Kernel installer
   1) Install/upgrade CloudTurbo Kernel from GitHub Releases
-  2) Select TCP strategy after reboot (BBRPlus / BBR2 / BBR)
-  3) Regenerate GRUB
-  4) Show kernel/TCP status
-  5) Update installer script
+  2) Enable BBR after reboot
+  3) Enable BBRPlus after reboot
+  4) Enable BBR2 after reboot
+  5) Select TCP strategy interactively
+  6) Regenerate GRUB
+  7) Show kernel/TCP status
+  8) Update installer script
   0) Exit
 EOF
       read -r -p 'Choose an option: ' opt
     fi
     case "$opt" in
       1) install_kernel_flow ;;
-      2) enable_tcp_features ;;
-      3) update_bootloader; pause_prompt ;;
-      4) show_status ;;
-      5) self_update ;;
+      2) enable_tcp_features bbr ;;
+      3) enable_tcp_features bbrplus ;;
+      4) enable_tcp_features bbr2 ;;
+      5) enable_tcp_features ;;
+      6) update_bootloader; pause_prompt ;;
+      7) show_status ;;
+      8) self_update ;;
       0) exit 0 ;;
       *) warn "Invalid option." "选择无效。"; pause_prompt ;;
     esac
