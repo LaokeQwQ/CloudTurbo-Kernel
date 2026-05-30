@@ -42,7 +42,7 @@ At startup the installer shows its script version and release date, clears the s
 - optionally reboot;
 - after reboot, choose `bbrplus`, `bbr2`, or `bbr` separately, apply it with `fq` pacing, and verify the selected strategy is fully active before reporting success.
 
-Direct commands:
+The menu also exposes dedicated one-key actions for BBR, BBRPlus, and BBR2.\n\nDirect commands:
 
 ```bash
 # Interactive menu
