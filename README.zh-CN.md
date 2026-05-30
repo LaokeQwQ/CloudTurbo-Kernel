@@ -40,7 +40,7 @@ bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQw
 - 自动重新生成 GRUB 配置；
 - 检查新内核是否存在于 `/boot`；
 - 可选立即重启；
-- 重启后可一键启用当前内核提供的 TCP 加速特性，例如 `bbrplus` 或 `bbr`，并启用 `fq` pacing。
+- 重启后可分别选择 `bbrplus`、`bbr2` 或 `bbr`，配合 `fq` pacing 应用，并在确认所选策略完全生效后才提示成功。
 
 常用命令：
 
@@ -114,7 +114,7 @@ CloudTurbo 可以从以下上游构建：
 CloudTurbo 的配置片段位于 `config/cloudturbo-vps.config`，重点包括：
 
 - KVM、virtio、NVMe，以及常见 VPS 存储和网络驱动；
-- TCP BBR 与 `fq` pacing 支持；
+- TCP BBR、可用时的 BBRPlus/BBR2，以及 `fq` pacing 支持；
 - 现代 TCP/队列管理选项；
 - 面向生产服务器的低调试开销；
 - 事故排查所需的基础可观测能力。
