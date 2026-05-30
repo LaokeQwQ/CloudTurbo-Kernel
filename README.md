@@ -40,7 +40,7 @@ At startup the installer shows its script version and release date, clears the s
 - regenerate GRUB;
 - check that the new kernel exists under `/boot`;
 - optionally reboot;
-- after reboot, enable available TCP acceleration features such as `bbrplus` or `bbr` with `fq` pacing.
+- after reboot, choose `bbrplus`, `bbr2`, or `bbr` separately, apply it with `fq` pacing, and verify the selected strategy is fully active before reporting success.
 
 Direct commands:
 
@@ -114,7 +114,7 @@ The build workflow can also run on the latest upstream directly without waiting 
 CloudTurbo's config fragment is in `config/cloudturbo-vps.config`. It focuses on:
 
 - KVM, virtio, NVMe, common VPS storage and network drivers.
-- TCP BBR and fq pacing support.
+- TCP BBR, BBRPlus/BBR2 when available, and fq pacing support.
 - Modern TCP/queue management options.
 - Lower debug overhead for production servers.
 - Core observability features needed for incident response.
