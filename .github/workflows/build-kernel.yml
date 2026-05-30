@@ -86,7 +86,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            bc bison build-essential ca-certificates cpio debhelper dwarves fakeroot flex git jq \
+            bc bison build-essential ca-certificates ccache cpio debhelper dwarves fakeroot flex git jq \
             kmod libdw-dev libelf-dev libncurses-dev libssl-dev pahole python3 rsync xz-utils zstd
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
             sudo dpkg --add-architecture arm64
@@ -130,6 +130,23 @@ jobs:
               gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libssl-dev:arm64
           fi
 
+      - name: Restore arm64 ccache
+        if: ${{ matrix.arch == 'arm64' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-
+            ccache-${{ runner.os }}-${{ matrix.arch }}-
+
+      - name: Configure arm64 ccache
+        if: ${{ matrix.arch == 'arm64' }}
+        shell: bash
+        run: |
+          ccache --set-config=max_size=5G
+          ccache --zero-stats || true
+
       - name: Build kernel
         shell: bash
         env:
@@ -138,7 +155,27 @@ jobs:
           TARGET_ARCH: ${{ matrix.arch }}
           BUILD_DEBS: ${{ inputs.build_debs || 'true' }}
           LOCALVERSION: -cloudturbo
+          USE_CCACHE: ${{ matrix.arch == 'arm64' && 'true' || 'false' }}
         run: bash scripts/build-kernel.sh
+
+      - name: Generate package checksums
+        if: ${{ inputs.build_debs == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "out/${{ matrix.arch }}/metadata.env"
+          cd "out/${{ matrix.arch }}"
+          shopt -s nullglob
+          debs=( *.deb )
+          if [[ ${#debs[@]} -eq 0 ]]; then
+            echo "No .deb files found for checksum generation" >&2
+            exit 1
+          fi
+          md5sum "${debs[@]}" > "MD5SUMS-${deb_arch}.txt"
+          sha1sum "${debs[@]}" > "SHA1SUMS-${deb_arch}.txt"
+          sha256sum "${debs[@]}" > "SHA256SUMS-${deb_arch}.txt"
+          sha512sum "${debs[@]}" > "SHA512SUMS-${deb_arch}.txt"
+          cat "SHA256SUMS-${deb_arch}.txt"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -206,4 +243,8 @@ jobs:
             out/${{ matrix.arch }}/*.deb \
             out/${{ matrix.arch }}/metadata.env \
             out/${{ matrix.arch }}/config-${{ matrix.arch }} \
+            out/${{ matrix.arch }}/MD5SUMS-*.txt \
+            out/${{ matrix.arch }}/SHA1SUMS-*.txt \
+            out/${{ matrix.arch }}/SHA256SUMS-*.txt \
+            out/${{ matrix.arch }}/SHA512SUMS-*.txt \
             --clobber
