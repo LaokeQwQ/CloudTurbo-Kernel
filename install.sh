@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.1.2"
+SCRIPT_VERSION="1.2.0"
 SCRIPT_RELEASE_DATE="2026-05-30"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
@@ -217,15 +217,22 @@ download_release_assets() {
 import json, sys
 arch = sys.argv[1]
 rel = json.load(sys.stdin)
+checksum_names = {
+    f"MD5SUMS-{arch}.txt",
+    f"SHA1SUMS-{arch}.txt",
+    f"SHA256SUMS-{arch}.txt",
+    f"SHA512SUMS-{arch}.txt",
+}
 for asset in rel.get("assets", []):
     name = asset.get("name", "")
-    if not name.endswith(".deb"):
-        continue
-    if f"_{arch}.deb" not in name and "_all.deb" not in name:
+    if name.endswith(".deb"):
+        if f"_{arch}.deb" not in name and "_all.deb" not in name:
+            continue
+    elif name not in checksum_names:
         continue
     print("{}\t{}".format(name, asset.get("browser_download_url", "")))
 ' "$deb_arch" > "${WORK_DIR}/assets.tsv"
-  if [[ ! -s "${WORK_DIR}/assets.tsv" ]]; then
+  if ! awk -F '\t' '$1 ~ /\.deb$/ {found=1} END {exit found ? 0 : 1}' "${WORK_DIR}/assets.tsv"; then
     fail "Release ${tag} has no .deb assets for ${deb_arch}." "版本 ${tag} 没有适用于 ${deb_arch} 的 .deb 文件。"
     exit 1
   fi
@@ -238,7 +245,32 @@ for asset in rel.get("assets", []):
     curl -fL --retry 5 --retry-delay 2 -o "${WORK_DIR}/${name}" "$final_url"
   done < "${WORK_DIR}/assets.tsv"
 }
-
+verify_downloaded_assets() {
+  local deb_arch="$1"
+  local file
+  shopt -s nullglob
+  local debs=( "$WORK_DIR"/*.deb )
+  if [[ ${#debs[@]} -eq 0 ]]; then
+    fail "No downloaded .deb packages found." "没有找到已下载的 .deb 内核包。"
+    exit 1
+  fi
+  for file in "MD5SUMS-${deb_arch}.txt" "SHA1SUMS-${deb_arch}.txt" "SHA256SUMS-${deb_arch}.txt" "SHA512SUMS-${deb_arch}.txt"; do
+    if [[ ! -s "$WORK_DIR/$file" ]]; then
+      fail "Missing checksum manifest: ${file}" "缺少校验清单：${file}"
+      warn "Please choose a newer CloudTurbo release or rebuild it with checksum publishing enabled." "请选择更新的 CloudTurbo 版本，或重新构建并启用校验值发布。"
+      exit 1
+    fi
+  done
+  info "Verifying downloaded package checksums..." "正在校验已下载内核包的完整性..."
+  (
+    cd "$WORK_DIR"
+    md5sum -c "MD5SUMS-${deb_arch}.txt"
+    sha1sum -c "SHA1SUMS-${deb_arch}.txt"
+    sha256sum -c "SHA256SUMS-${deb_arch}.txt"
+    sha512sum -c "SHA512SUMS-${deb_arch}.txt"
+  )
+  ok "Checksum verification passed." "校验值验证通过。"
+}
 installed_kernel_versions_from_debs() {
   local deb pkg
   for deb in "$WORK_DIR"/*.deb; do
@@ -360,6 +392,7 @@ install_kernel_flow() {
   fi
   warn "Selected release: ${tag}" "已选择版本：${tag}"
   download_release_assets "$tag" "$deb_arch"
+  verify_downloaded_assets "$deb_arch"
   install_downloaded_debs
   versions="$(installed_kernel_versions_from_debs)"
   purge_old_kernels "$versions"
