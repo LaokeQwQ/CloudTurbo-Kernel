@@ -42,7 +42,7 @@ bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQw
 - 可选立即重启；
 - 重启后可分别选择 `bbrplus`、`bbr2` 或 `bbr`，配合 `fq` pacing 应用，并在确认所选策略完全生效后才提示成功。
 
-常用命令：
+主菜单也提供 BBR、BBRPlus、BBR2 三个独立的一键启用入口。\n\n常用命令：
 
 ```bash
 # 交互式菜单
