@@ -108,7 +108,7 @@ CloudTurbo 可以从以下上游构建：
 - `build_debs`：是否生成 Debian 包
 - `publish_release`：是否将 `.deb` 发布到 GitHub Releases，供一键安装脚本列出和下载
 
-构建产物包含最终 `.config`、构建元数据、日志、校验清单，以及在启用包构建时生成的 `.deb` 文件。安装脚本列出的“已编译版本”来自 GitHub Releases。发布版本会附带 MD5、SHA1、SHA256、SHA512 校验清单，安装脚本会在安装前完成比对。每次构建时，`scripts/integrate-tcp-cc.sh` 会从 UJX6N 的 6.x patch 源注入 BBRPlus，并适配当前 TCP 拥塞控制 API。arm64 构建会在可用时使用 ccache 加快重复交叉编译。
+构建产物包含最终 `.config`、构建元数据、日志、校验清单，以及在启用包构建时生成的 `.deb` 文件。每次发布构建都会生成独立 release tag，因此即使重复构建同一个上游内核，也会保留为单独的 CloudTurbo 小版本，而不是覆盖上一个 release。安装脚本列出的“已编译版本”来自 GitHub Releases。发布版本会附带 MD5、SHA1、SHA256、SHA512 校验清单，安装脚本会在安装前完成比对。每次构建时，`scripts/integrate-tcp-cc.sh` 会从 UJX6N 的 6.x patch 源注入 BBRPlus，并适配当前 TCP 拥塞控制 API。arm64 构建会在可用时使用 ccache 加快重复交叉编译。
 
 ## 上游跟踪
 

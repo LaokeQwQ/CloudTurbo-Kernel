@@ -108,7 +108,7 @@ Open **Actions -> Build Kernel -> Run workflow** and choose:
 - `build_debs`: whether to produce Debian packages
 - `publish_release`: whether to publish `.deb` packages to GitHub Releases for the installer
 
-Artifacts contain the final `.config`, build metadata, logs, checksum manifests, and `.deb` files when package building is enabled. Published releases are what the one-click installer lists as compiled versions. Release packages include MD5, SHA1, SHA256, and SHA512 manifests, and the installer verifies them before installation. During each build, `scripts/integrate-tcp-cc.sh` injects BBRPlus from the UJX6N 6.x patch source and adapts it to the current TCP congestion-control API. arm64 builds use ccache to speed up repeated cross-compilation when a cache is available.
+Artifacts contain the final `.config`, build metadata, logs, checksum manifests, and `.deb` files when package building is enabled. Each published workflow run gets its own release tag, so a rebuild of the same upstream kernel is kept as a separate CloudTurbo build version instead of overwriting the previous release. Published releases are what the one-click installer lists as compiled versions. Release packages include MD5, SHA1, SHA256, and SHA512 manifests, and the installer verifies them before installation. During each build, `scripts/integrate-tcp-cc.sh` injects BBRPlus from the UJX6N 6.x patch source and adapts it to the current TCP congestion-control API. arm64 builds use ccache to speed up repeated cross-compilation when a cache is available.
 
 ## Upstream Tracking
 
