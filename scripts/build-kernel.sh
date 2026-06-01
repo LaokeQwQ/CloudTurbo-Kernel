@@ -31,6 +31,8 @@ fi
 
 cd "$work_dir/linux-src"
 
+bash "$repo_root/scripts/integrate-tcp-cc.sh" "$work_dir/linux-src"
+
 case "$target_arch" in
   x86_64|amd64)
     karch="x86"

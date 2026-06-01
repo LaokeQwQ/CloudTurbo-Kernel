@@ -86,7 +86,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            bc bison build-essential ca-certificates ccache cpio debhelper dwarves fakeroot flex git jq \
+            bc bison build-essential ca-certificates ccache cpio curl debhelper dwarves fakeroot flex git jq \
             kmod libdw-dev libelf-dev libncurses-dev libssl-dev pahole python3 rsync xz-utils zstd
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
             sudo dpkg --add-architecture arm64
