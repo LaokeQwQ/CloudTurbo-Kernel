@@ -31,6 +31,8 @@ fi
 
 cd "$work_dir/linux-src"
 
+bash "$repo_root/scripts/integrate-tcp-cc.sh" "$work_dir/linux-src"
+
 case "$target_arch" in
   x86_64|amd64)
     karch="x86"
@@ -49,6 +51,10 @@ case "$target_arch" in
     if [[ "$use_ccache" != "false" ]] && command -v ccache >/dev/null 2>&1; then
       export CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
       export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-5G}"
+      export CCACHE_BASEDIR="${CCACHE_BASEDIR:-${GITHUB_WORKSPACE:-$repo_root}}"
+      export CCACHE_NOHASHDIR="${CCACHE_NOHASHDIR:-true}"
+      export CCACHE_COMPILERCHECK="${CCACHE_COMPILERCHECK:-content}"
+      export CCACHE_SLOPPINESS="${CCACHE_SLOPPINESS:-time_macros,file_macro,include_file_mtime,include_file_ctime}"
       ccache --set-config=max_size="$CCACHE_MAXSIZE" >/dev/null 2>&1 || true
       cross_compile="ccache aarch64-linux-gnu-"
     fi
@@ -68,6 +74,7 @@ fi
 make "${make_args[@]}" "$defconfig"
 ./scripts/kconfig/merge_config.sh -m .config "$repo_root/config/cloudturbo-vps.config"
 make "${make_args[@]}" olddefconfig
+bash "$repo_root/scripts/check-kernel-config.sh" .config
 
 kernel_version="$(make -s kernelversion)"
 {

@@ -4,7 +4,7 @@
 
 CloudTurbo Kernel 是一个专为 VPS 稳定运行优化的定制 Linux 内核构建仓库。它跟随上游 Linux 内核源码更新，并自动为 x86_64 与 arm64 架构构建可复现的内核包。
 
-仓库本身保持轻量：不内置完整内核源码，也不长期维护复杂的第三方实验补丁栈。GitHub Actions 会解析选定的上游分支、拉取源码、合并 CloudTurbo 的 VPS 配置片段，然后生成构建产物。
+仓库本身保持轻量：不内置完整内核源码。GitHub Actions 会解析选定的上游分支、拉取源码、注入 CloudTurbo 的 TCP 拥塞控制扩展、合并 VPS 配置片段，然后生成构建产物。
 
 ## 目标
 
@@ -40,9 +40,9 @@ bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQw
 - 自动重新生成 GRUB 配置；
 - 检查新内核是否存在于 `/boot`；
 - 可选立即重启；
-- 重启后可分别选择 `bbrplus`、`bbr2` 或 `bbr`，配合 `fq` pacing 应用，并在确认所选策略完全生效后才提示成功。
+- 重启后可分别选择 `bbrplus`、可用时的 `bbr2` 或 `bbr`，配合 `fq` pacing 应用，并在确认所选策略完全生效后才提示成功。
 
-主菜单也提供 BBR、BBRPlus、BBR2 三个独立的一键启用入口。
+主菜单也提供 BBR、BBRPlus、BBR2 三个独立的一键启用入口。当前 XanMod 7.0 构建中，Google BBRv3 以 Linux 内核算法名 `bbr` 暴露；BBRPlus 会以内置算法 `bbrplus` 暴露。
 
 常用命令：
 
@@ -56,7 +56,7 @@ CLOUDTURBO_LANG=zh sudo -E bash install.sh
 # 从已发布版本安装/升级内核
 sudo bash install.sh install
 
-# 重启进入新内核后：交互选择 BBRPlus、BBR2、BBR 或其他可用策略
+# 重启进入新内核后：交互选择 BBRPlus、可用时的 BBR2、BBR 或其他可用策略
 sudo bash install.sh tune
 
 # 或直接启用指定策略，并验证是否完全生效
@@ -108,7 +108,7 @@ CloudTurbo 可以从以下上游构建：
 - `build_debs`：是否生成 Debian 包
 - `publish_release`：是否将 `.deb` 发布到 GitHub Releases，供一键安装脚本列出和下载
 
-构建产物包含最终 `.config`、构建元数据、日志、校验清单，以及在启用包构建时生成的 `.deb` 文件。安装脚本列出的“已编译版本”来自 GitHub Releases。发布版本会附带 MD5、SHA1、SHA256、SHA512 校验清单，安装脚本会在安装前完成比对。arm64 构建会在可用时使用 ccache 加快重复交叉编译。
+构建产物包含最终 `.config`、构建元数据、日志、校验清单，以及在启用包构建时生成的 `.deb` 文件。安装脚本列出的“已编译版本”来自 GitHub Releases。发布版本会附带 MD5、SHA1、SHA256、SHA512 校验清单，安装脚本会在安装前完成比对。每次构建时，`scripts/integrate-tcp-cc.sh` 会从 UJX6N 的 6.x patch 源注入 BBRPlus，并适配当前 TCP 拥塞控制 API。arm64 构建会在可用时使用 ccache 加快重复交叉编译。
 
 ## 上游跟踪
 
@@ -121,7 +121,8 @@ CloudTurbo 可以从以下上游构建：
 CloudTurbo 的配置片段位于 `config/cloudturbo-vps.config`，重点包括：
 
 - KVM、virtio、NVMe，以及常见 VPS 存储和网络驱动；
-- TCP BBR、可用时的 BBRPlus/BBR2，以及 `fq` pacing 支持；
+- TCP BBR/BBRv3、内置 BBRPlus、可用时的 BBR2，以及 `fq` pacing 支持；
+- 为 Docker/容器主机启用 nftables NAT、bridge netfilter、veth、overlayfs 与 iptables 兼容回退；
 - 现代 TCP/队列管理选项；
 - 面向生产服务器的低调试开销；
 - 事故排查所需的基础可观测能力。

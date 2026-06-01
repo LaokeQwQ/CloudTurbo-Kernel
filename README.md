@@ -4,7 +4,7 @@
 
 CloudTurbo Kernel is a VPS-focused custom Linux kernel build repository. It follows upstream Linux kernel sources and automatically builds reproducible kernel packages for x86_64 and arm64.
 
-The repository intentionally stays small: it does not vendor a full kernel tree and does not carry experimental third-party patch stacks. GitHub Actions resolves the selected upstream branch, fetches the source, applies CloudTurbo's VPS-oriented kernel config fragment, and builds artifacts.
+The repository intentionally stays small: it does not vendor a full kernel tree. GitHub Actions resolves the selected upstream branch, fetches the source, injects the CloudTurbo TCP congestion-control additions, applies the VPS-oriented kernel config fragment, and builds artifacts.
 
 ## Goals
 
@@ -40,9 +40,9 @@ At startup the installer shows its script version and release date, clears the s
 - regenerate GRUB;
 - check that the new kernel exists under `/boot`;
 - optionally reboot;
-- after reboot, choose `bbrplus`, `bbr2`, or `bbr` separately, apply it with `fq` pacing, and verify the selected strategy is fully active before reporting success.
+- after reboot, choose `bbrplus`, `bbr2` when available, or `bbr` separately, apply it with `fq` pacing, and verify the selected strategy is fully active before reporting success.
 
-The menu also exposes dedicated one-key actions for BBR, BBRPlus, and BBR2.
+The menu also exposes dedicated one-key actions for BBR, BBRPlus, and BBR2. Current XanMod 7.0 builds expose Google's BBRv3 through the kernel algorithm name `bbr`; BBRPlus is built in as `bbrplus`.
 
 Direct commands:
 
@@ -56,7 +56,7 @@ CLOUDTURBO_LANG=zh sudo -E bash install.sh
 # Install/upgrade kernel from published releases
 sudo bash install.sh install
 
-# After reboot: choose BBRPlus, BBR2, BBR, or another available strategy interactively
+# After reboot: choose BBRPlus, BBR2 when available, BBR, or another available strategy interactively
 sudo bash install.sh tune
 
 # Or enable a specific strategy directly and verify it took effect
@@ -108,7 +108,7 @@ Open **Actions -> Build Kernel -> Run workflow** and choose:
 - `build_debs`: whether to produce Debian packages
 - `publish_release`: whether to publish `.deb` packages to GitHub Releases for the installer
 
-Artifacts contain the final `.config`, build metadata, logs, checksum manifests, and `.deb` files when package building is enabled. Published releases are what the one-click installer lists as compiled versions. Release packages include MD5, SHA1, SHA256, and SHA512 manifests, and the installer verifies them before installation. arm64 builds use ccache to speed up repeated cross-compilation when a cache is available.
+Artifacts contain the final `.config`, build metadata, logs, checksum manifests, and `.deb` files when package building is enabled. Published releases are what the one-click installer lists as compiled versions. Release packages include MD5, SHA1, SHA256, and SHA512 manifests, and the installer verifies them before installation. During each build, `scripts/integrate-tcp-cc.sh` injects BBRPlus from the UJX6N 6.x patch source and adapts it to the current TCP congestion-control API. arm64 builds use ccache to speed up repeated cross-compilation when a cache is available.
 
 ## Upstream Tracking
 
@@ -121,7 +121,8 @@ The build workflow can also run on the latest upstream directly without waiting 
 CloudTurbo's config fragment is in `config/cloudturbo-vps.config`. It focuses on:
 
 - KVM, virtio, NVMe, common VPS storage and network drivers.
-- TCP BBR, BBRPlus/BBR2 when available, and fq pacing support.
+- TCP BBR/BBRv3, built-in BBRPlus, BBR2 when available, and fq pacing support.
+- nftables NAT, bridge netfilter, veth, overlayfs, and iptables fallback support for Docker/container hosts.
 - Modern TCP/queue management options.
 - Lower debug overhead for production servers.
 - Core observability features needed for incident response.

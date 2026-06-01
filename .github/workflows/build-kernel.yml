@@ -81,12 +81,17 @@ jobs:
       - name: Checkout CloudTurbo
         uses: actions/checkout@v4
 
+      - name: Resolve upstream for cache key
+        id: upstream
+        shell: bash
+        run: bash scripts/resolve-upstream.sh "${{ inputs.source || 'xanmod' }}" "${{ inputs.kernel_ref || 'auto' }}"
+
       - name: Install build dependencies
         shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            bc bison build-essential ca-certificates ccache cpio debhelper dwarves fakeroot flex git jq \
+            bc bison build-essential ca-certificates ccache cpio curl debhelper dwarves fakeroot flex git jq \
             kmod libdw-dev libelf-dev libncurses-dev libssl-dev pahole python3 rsync xz-utils zstd
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
             sudo dpkg --add-architecture arm64
@@ -135,9 +140,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-${{ github.run_id }}
+          key: ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ steps.upstream.outputs.resolved_sha }}-${{ hashFiles('config/cloudturbo-vps.config', 'scripts/*.sh') }}
           restore-keys: |
-            ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-
+            ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ steps.upstream.outputs.resolved_sha }}-
+            ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-
             ccache-${{ runner.os }}-${{ matrix.arch }}-
 
       - name: Configure arm64 ccache
@@ -145,6 +151,9 @@ jobs:
         shell: bash
         run: |
           ccache --set-config=max_size=5G
+          ccache --set-config=compression=true
+          ccache --set-config=compiler_check=content
+          ccache --set-config=sloppiness=time_macros,file_macro,include_file_mtime,include_file_ctime
           ccache --zero-stats || true
 
       - name: Build kernel
@@ -156,6 +165,9 @@ jobs:
           BUILD_DEBS: ${{ inputs.build_debs || 'true' }}
           LOCALVERSION: -cloudturbo
           USE_CCACHE: ${{ matrix.arch == 'arm64' && 'true' || 'false' }}
+          KBUILD_BUILD_TIMESTAMP: "1970-01-01 00:00:00"
+          KBUILD_BUILD_USER: cloudturbo
+          KBUILD_BUILD_HOST: github-actions
         run: bash scripts/build-kernel.sh
 
       - name: Generate package checksums
@@ -229,6 +241,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          set -a
+          # shellcheck disable=SC1090
+          source "out/${{ matrix.arch }}/metadata.env"
+          set +a
           tag="${{ steps.release.outputs.tag }}"
           title="${{ steps.release.outputs.title }}"
           notes="${{ steps.release.outputs.notes }}"
@@ -239,6 +255,13 @@ jobs:
             gh release view "$tag" >/dev/null 2>&1 && break
             sleep 5
           done
+          while IFS= read -r asset; do
+            case "$asset" in
+              *_${deb_arch}.deb|MD5SUMS-${deb_arch}.txt|SHA1SUMS-${deb_arch}.txt|SHA256SUMS-${deb_arch}.txt|SHA512SUMS-${deb_arch}.txt|config-${{ matrix.arch }})
+                gh release delete-asset "$tag" "$asset" -y || true
+                ;;
+            esac
+          done < <(gh release view "$tag" --json assets --jq '.assets[].name')
           gh release upload "$tag" \
             out/${{ matrix.arch }}/*.deb \
             out/${{ matrix.arch }}/metadata.env \
