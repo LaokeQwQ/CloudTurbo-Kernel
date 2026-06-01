@@ -30,7 +30,7 @@ bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQw
 
 安装脚本启动时会显示脚本版本号和发布日期，每次进入交互步骤前会自动清屏，并让你选择 English 或简体中文。也可以通过 `CLOUDTURBO_LANG=zh` 或 `CLOUDTURBO_LANG=en` 跳过选择。安装脚本支持从 main 分支自更新。安装脚本会：
 
-- 从 GitHub Releases 自动列出已编译的 CloudTurbo Kernel 版本；
+- 从已发布且非预发布的 GitHub Releases 自动列出已编译的 CloudTurbo Kernel 版本；
 - 自动识别当前架构（`amd64` 或 `arm64`）；
 - 下载内核包前询问是否使用镜像站；
 - 下载选中的 .deb 内核包；

@@ -30,7 +30,7 @@ bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQw
 
 At startup the installer shows its script version and release date, clears the screen before each interactive step, and lets you choose English or Simplified Chinese. You can also skip the prompt with `CLOUDTURBO_LANG=zh` or `CLOUDTURBO_LANG=en`. The installer supports self-update from the main branch. It will:
 
-- list compiled CloudTurbo Kernel versions from GitHub Releases;
+- list compiled CloudTurbo Kernel versions from published, non-prerelease GitHub Releases;
 - detect the current architecture (`amd64` or `arm64`);
 - ask whether to use a mirror before downloading packages;
 - download the selected .deb kernel packages;

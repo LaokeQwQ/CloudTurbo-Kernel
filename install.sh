@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.2.5"
+SCRIPT_VERSION="1.2.6"
 SCRIPT_RELEASE_DATE="2026-06-01"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
@@ -159,7 +159,7 @@ except Exception as exc:
     sys.exit(2)
 rows = []
 for rel in releases:
-    if rel.get("draft"):
+    if rel.get("draft") or rel.get("prerelease"):
         continue
     assets = rel.get("assets", [])
     debs = [a for a in assets if a.get("name", "").endswith(".deb")]

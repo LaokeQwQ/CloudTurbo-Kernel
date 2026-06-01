@@ -46,6 +46,18 @@ required_builtin=(
   CONFIG_TCP_CONG_BBR
   CONFIG_TCP_CONG_BBRPLUS
   CONFIG_NET_SCH_FQ
+  CONFIG_NET
+  CONFIG_NET_CORE
+  CONFIG_PACKET
+  CONFIG_UNIX
+  CONFIG_PCI
+  CONFIG_PCI_MSI
+  CONFIG_VIRTIO
+  CONFIG_VIRTIO_PCI
+  CONFIG_VIRTIO_PCI_LEGACY
+  CONFIG_VIRTIO_NET
+  CONFIG_FAILOVER
+  CONFIG_NET_FAILOVER
   CONFIG_NF_CONNTRACK
   CONFIG_NF_NAT
   CONFIG_NF_TABLES
@@ -85,6 +97,23 @@ required_enabled=(
   CONFIG_NETFILTER_XT_MATCH_CONNTRACK
 )
 
+recommended_enabled=(
+  CONFIG_E1000
+  CONFIG_E1000E
+  CONFIG_ENA_ETHERNET
+  CONFIG_GVE
+  CONFIG_HYPERV_NET
+  CONFIG_IGB
+  CONFIG_I40E
+  CONFIG_IAVF
+  CONFIG_IXGBE
+  CONFIG_MLX4_EN
+  CONFIG_MLX5_CORE
+  CONFIG_TIGON3
+  CONFIG_VMXNET3
+  CONFIG_XEN_NETDEV_FRONTEND
+)
+
 failed=0
 
 for symbol in "${required_builtin[@]}"; do
@@ -93,6 +122,13 @@ done
 
 for symbol in "${required_enabled[@]}"; do
   require_enabled "$symbol" || failed=1
+done
+
+for symbol in "${recommended_enabled[@]}"; do
+  actual="$(get_config_value "$symbol")"
+  if [[ "$actual" != "y" && "$actual" != "m" ]]; then
+    echo "recommended $symbol enabled for broad cloud NIC compatibility, got $actual" >&2
+  fi
 done
 
 if [[ "$(get_config_value CONFIG_DEFAULT_TCP_CONG)" != '"bbr"' ]]; then
