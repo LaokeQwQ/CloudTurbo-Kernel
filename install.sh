@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.2.3"
+SCRIPT_VERSION="1.2.4"
 SCRIPT_RELEASE_DATE="2026-06-01"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
@@ -287,7 +287,7 @@ verify_downloaded_assets() {
   fi
   ok "Checksum verification passed." "校验值验证通过。"
 }
-installed_kernel_versions_from_debs() {
+kernel_package_versions_from_debs() {
   local deb pkg
   for deb in "$WORK_DIR"/*.deb; do
     [[ -f "$deb" ]] || continue
@@ -298,17 +298,39 @@ installed_kernel_versions_from_debs() {
   done | sort -u
 }
 
+boot_kernel_versions_from_debs() {
+  local deb versions
+  versions="$(
+    for deb in "$WORK_DIR"/linux-image-*.deb; do
+      [[ -f "$deb" ]] || continue
+      dpkg-deb -c "$deb" 2>/dev/null \
+        | awk '{print $NF}' \
+        | sed -n 's#^\./boot/vmlinuz-##p'
+    done | sort -u
+  )"
+  if [[ -n "$versions" ]]; then
+    printf '%s\n' "$versions" | tee "${WORK_DIR}/boot-kernel-versions.txt"
+  else
+    kernel_package_versions_from_debs
+  fi
+}
+
 install_downloaded_debs() {
   need_root
   info "Installing downloaded kernel packages..." "正在安装已下载的内核包..."
   dpkg -i "$WORK_DIR"/*.deb || apt-get -f install -y
-  local versions
-  versions="$(installed_kernel_versions_from_debs)"
-  if [[ -z "$versions" ]]; then
-    warn "Could not infer installed kernel version from downloaded linux-image packages." "无法从已下载的 linux-image 包推断内核版本。"
+  local boot_versions package_versions
+  boot_versions="$(boot_kernel_versions_from_debs)"
+  package_versions="$(kernel_package_versions_from_debs)"
+  if [[ -z "$boot_versions" ]]; then
+    warn "Could not infer installed boot kernel version from downloaded linux-image packages." "无法从已下载的 linux-image 包推断实际启动内核版本。"
   else
-    ok "Installed kernel version(s):" "已安装内核版本："
-    printf '%s\n' "$versions" | sed 's/^/  - /' >&2
+    ok "Installed boot kernel version(s):" "已安装启动内核版本："
+    printf '%s\n' "$boot_versions" | sed 's/^/  - /' >&2
+  fi
+  if [[ -n "$package_versions" && "$package_versions" != "$boot_versions" ]]; then
+    info "Installed kernel package version(s):" "已安装内核包版本："
+    printf '%s\n' "$package_versions" | sed 's/^/  - /' >&2
   fi
 }
 
@@ -398,7 +420,7 @@ reboot_prompt() {
 install_kernel_flow() {
   need_root
   ensure_runtime_packages
-  local deb_arch tag versions
+  local deb_arch tag boot_versions package_versions keep_versions
   deb_arch="$(arch_deb)"
   tag="$(select_release "$deb_arch" | awk 'NF {last=$0} END {print last}')"
   tag="$(printf '%s' "$tag" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
@@ -410,10 +432,12 @@ install_kernel_flow() {
   download_release_assets "$tag" "$deb_arch"
   verify_downloaded_assets "$deb_arch"
   install_downloaded_debs
-  versions="$(installed_kernel_versions_from_debs)"
-  purge_old_kernels "$versions"
+  boot_versions="$(boot_kernel_versions_from_debs)"
+  package_versions="$(kernel_package_versions_from_debs)"
+  keep_versions="$(printf '%s\n%s\n' "$boot_versions" "$package_versions" | sed '/^$/d' | sort -u)"
+  purge_old_kernels "$keep_versions"
   update_bootloader
-  check_installed_kernel "$versions"
+  check_installed_kernel "$boot_versions"
   reboot_prompt
 }
 
