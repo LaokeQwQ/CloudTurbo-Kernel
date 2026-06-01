@@ -136,6 +136,11 @@ if [[ "$(get_config_value CONFIG_DEFAULT_TCP_CONG)" != '"bbr"' ]]; then
   failed=1
 fi
 
+if [[ "$(get_config_value CONFIG_LOCALVERSION)" != '""' ]]; then
+  echo "required CONFIG_LOCALVERSION=\"\", got $(get_config_value CONFIG_LOCALVERSION)" >&2
+  failed=1
+fi
+
 if [[ "$(get_config_value CONFIG_LOCALVERSION_AUTO)" != "n" ]]; then
   echo "required CONFIG_LOCALVERSION_AUTO disabled, got $(get_config_value CONFIG_LOCALVERSION_AUTO)" >&2
   failed=1

@@ -72,6 +72,18 @@ if [[ -n "$cross_compile" ]]; then
 fi
 
 make "${make_args[@]}" "$defconfig"
+
+source_fragments=(
+  "kernel/configs/kvm_guest.config"
+  "arch/$karch/configs/virt.config"
+)
+for fragment in "${source_fragments[@]}"; do
+  if [[ -f "$fragment" ]]; then
+    echo "Merging upstream virtualization config fragment: $fragment"
+    ./scripts/kconfig/merge_config.sh -m .config "$fragment"
+  fi
+done
+
 ./scripts/kconfig/merge_config.sh -m .config "$repo_root/config/cloudturbo-vps.config"
 make "${make_args[@]}" olddefconfig
 make "${make_args[@]}" syncconfig
