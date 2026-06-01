@@ -81,6 +81,11 @@ jobs:
       - name: Checkout CloudTurbo
         uses: actions/checkout@v4
 
+      - name: Resolve upstream for cache key
+        id: upstream
+        shell: bash
+        run: bash scripts/resolve-upstream.sh "${{ inputs.source || 'xanmod' }}" "${{ inputs.kernel_ref || 'auto' }}"
+
       - name: Install build dependencies
         shell: bash
         run: |
@@ -135,9 +140,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-${{ github.run_id }}
+          key: ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ steps.upstream.outputs.resolved_sha }}-${{ hashFiles('config/cloudturbo-vps.config', 'scripts/*.sh') }}
           restore-keys: |
-            ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-
+            ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ steps.upstream.outputs.resolved_sha }}-
+            ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-
             ccache-${{ runner.os }}-${{ matrix.arch }}-
 
       - name: Configure arm64 ccache
@@ -145,6 +151,9 @@ jobs:
         shell: bash
         run: |
           ccache --set-config=max_size=5G
+          ccache --set-config=compression=true
+          ccache --set-config=compiler_check=content
+          ccache --set-config=sloppiness=time_macros,file_macro,include_file_mtime,include_file_ctime
           ccache --zero-stats || true
 
       - name: Build kernel
@@ -156,6 +165,9 @@ jobs:
           BUILD_DEBS: ${{ inputs.build_debs || 'true' }}
           LOCALVERSION: -cloudturbo
           USE_CCACHE: ${{ matrix.arch == 'arm64' && 'true' || 'false' }}
+          KBUILD_BUILD_TIMESTAMP: "1970-01-01 00:00:00"
+          KBUILD_BUILD_USER: cloudturbo
+          KBUILD_BUILD_HOST: github-actions
         run: bash scripts/build-kernel.sh
 
       - name: Generate package checksums
