@@ -77,6 +77,12 @@ make "${make_args[@]}" olddefconfig
 bash "$repo_root/scripts/check-kernel-config.sh" .config
 
 kernel_version="$(make -s kernelversion)"
+kernel_release="$(make -s "${make_args[@]}" kernelrelease LOCALVERSION="$localversion")"
+if [[ "$kernel_release" =~ -g[0-9a-f]{7,} ]]; then
+  echo "kernel release unexpectedly contains a git suffix: $kernel_release" >&2
+  echo "CONFIG_LOCALVERSION_AUTO must stay disabled for deterministic CloudTurbo package names." >&2
+  exit 20
+fi
 {
   echo "source=$SOURCE_NAME"
   echo "source_repo=$SOURCE_REPO"
@@ -84,6 +90,7 @@ kernel_version="$(make -s kernelversion)"
   echo "resolved_ref=$RESOLVED_REF"
   echo "resolved_sha=$RESOLVED_SHA"
   echo "kernel_version=$kernel_version"
+  echo "kernel_release=$kernel_release"
   echo "target_arch=$target_arch"
   echo "deb_arch=$deb_arch"
   echo "localversion=$localversion"
@@ -95,9 +102,25 @@ cp .config "$out_dir/config-$target_arch"
 if [[ "$build_debs" == "true" ]]; then
   export KDEB_PKGVERSION="${kernel_version}-1"
   make "${make_args[@]}" -j"$jobs" bindeb-pkg LOCALVERSION="$localversion" 2>&1 | tee "$out_dir/build.log"
+  if [[ ! -f vmlinux ]] || ! grep -a -q 'bbrplus' vmlinux; then
+    echo "built vmlinux does not contain the bbrplus registration string" >&2
+    exit 21
+  fi
+  if [[ ! -f net/ipv4/tcp_bbrplus.o ]]; then
+    echo "net/ipv4/tcp_bbrplus.o was not produced" >&2
+    exit 22
+  fi
   find "$work_dir" -maxdepth 1 -type f \( -name '*.deb' -o -name '*.ddeb' \) -print -exec cp {} "$out_dir/" \;
 else
   make "${make_args[@]}" -j"$jobs" "$image_target" modules LOCALVERSION="$localversion" 2>&1 | tee "$out_dir/build.log"
+  if [[ ! -f vmlinux ]] || ! grep -a -q 'bbrplus' vmlinux; then
+    echo "built vmlinux does not contain the bbrplus registration string" >&2
+    exit 21
+  fi
+  if [[ ! -f net/ipv4/tcp_bbrplus.o ]]; then
+    echo "net/ipv4/tcp_bbrplus.o was not produced" >&2
+    exit 22
+  fi
   if [[ -f "$image_path" ]]; then
     cp "$image_path" "$out_dir/"
   fi
