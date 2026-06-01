@@ -209,12 +209,15 @@ jobs:
           set +a
           safe_ref="$(printf '%s' "$resolved_ref" | tr '/ :' '---' | tr -cd 'A-Za-z0-9._-')"
           sha7="${resolved_sha:0:7}"
-          tag="cloudturbo-${source}-${safe_ref}-${sha7}"
-          title="CloudTurbo Kernel ${source} ${resolved_ref} (${sha7})"
+          build_version="r${GITHUB_RUN_NUMBER}a${GITHUB_RUN_ATTEMPT}"
+          tag="cloudturbo-${source}-${safe_ref}-${sha7}-${build_version}"
+          title="CloudTurbo Kernel ${source} ${resolved_ref} (${sha7}) ${build_version}"
           notes="out/${{ matrix.arch }}/release-notes.md"
           cat > "$notes" <<EOF
           # ${title}
 
+          - Build version: ${build_version}
+          - Build run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           - Source: ${source_repo}
           - Ref: ${resolved_ref}
           - SHA: ${resolved_sha}
