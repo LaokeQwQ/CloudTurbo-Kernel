@@ -229,6 +229,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          set -a
+          # shellcheck disable=SC1090
+          source "out/${{ matrix.arch }}/metadata.env"
+          set +a
           tag="${{ steps.release.outputs.tag }}"
           title="${{ steps.release.outputs.title }}"
           notes="${{ steps.release.outputs.notes }}"
@@ -239,6 +243,13 @@ jobs:
             gh release view "$tag" >/dev/null 2>&1 && break
             sleep 5
           done
+          while IFS= read -r asset; do
+            case "$asset" in
+              *_${deb_arch}.deb|MD5SUMS-${deb_arch}.txt|SHA1SUMS-${deb_arch}.txt|SHA256SUMS-${deb_arch}.txt|SHA512SUMS-${deb_arch}.txt|config-${{ matrix.arch }})
+                gh release delete-asset "$tag" "$asset" -y || true
+                ;;
+            esac
+          done < <(gh release view "$tag" --json assets --jq '.assets[].name')
           gh release upload "$tag" \
             out/${{ matrix.arch }}/*.deb \
             out/${{ matrix.arch }}/metadata.env \
