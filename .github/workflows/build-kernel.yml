@@ -219,8 +219,10 @@ jobs:
           - Ref: ${resolved_ref}
           - SHA: ${resolved_sha}
           - Kernel version: ${kernel_version}
-          - Architecture: ${{ matrix.arch }} (${deb_arch})
+          - Uploaded by this job: ${{ matrix.arch }} (${deb_arch})
+          - Published architectures: x86_64/amd64 and arm64 when both matrix jobs complete
           - Local version: ${localversion}
+          - Includes BBRPlus, BBRv3 as \`bbr\`, Docker-ready nftables NAT, bridge netfilter, veth, and overlayfs support.
 
           Install with:
 
@@ -249,12 +251,13 @@ jobs:
           title="${{ steps.release.outputs.title }}"
           notes="${{ steps.release.outputs.notes }}"
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --target "$GITHUB_SHA" --title "$title" --notes-file "$notes" || true
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$title" --notes-file "$notes" --latest || true
           fi
           for i in {1..12}; do
             gh release view "$tag" >/dev/null 2>&1 && break
             sleep 5
           done
+          gh release edit "$tag" --target "$GITHUB_SHA" --title "$title" --notes-file "$notes" --latest
           while IFS= read -r asset; do
             case "$asset" in
               *_${deb_arch}.deb|MD5SUMS-${deb_arch}.txt|SHA1SUMS-${deb_arch}.txt|SHA256SUMS-${deb_arch}.txt|SHA512SUMS-${deb_arch}.txt|config-${{ matrix.arch }})
