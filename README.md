@@ -35,6 +35,7 @@ At startup the installer shows its script version and release date, clears the s
 - ask whether to use a mirror before downloading packages;
 - download the selected .deb kernel packages;
 - download MD5, SHA1, SHA256, and SHA512 checksum manifests and verify package checksums before installation;
+- stop on checksum mismatch by default, with an explicit high-risk confirmation prompt if you choose to continue anyway;
 - install the selected version;
 - optionally uninstall old kernels while keeping the running and newly installed kernels;
 - regenerate GRUB;

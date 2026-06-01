@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.2.2"
-SCRIPT_RELEASE_DATE="2026-05-30"
+SCRIPT_VERSION="1.2.3"
+SCRIPT_RELEASE_DATE="2026-06-01"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
 API_BASE="https://api.github.com/repos/${OWNER}/${REPO}"
@@ -248,6 +248,7 @@ for asset in rel.get("assets", []):
 verify_downloaded_assets() {
   local deb_arch="$1"
   local file
+  local failed=0
   shopt -s nullglob
   local debs=( "$WORK_DIR"/*.deb )
   if [[ ${#debs[@]} -eq 0 ]]; then
@@ -262,13 +263,28 @@ verify_downloaded_assets() {
     fi
   done
   info "Verifying downloaded package checksums..." "正在校验已下载内核包的完整性..."
-  (
-    cd "$WORK_DIR"
-    md5sum -c "MD5SUMS-${deb_arch}.txt"
-    sha1sum -c "SHA1SUMS-${deb_arch}.txt"
-    sha256sum -c "SHA256SUMS-${deb_arch}.txt"
-    sha512sum -c "SHA512SUMS-${deb_arch}.txt"
-  )
+  if ! (cd "$WORK_DIR" && md5sum -c "MD5SUMS-${deb_arch}.txt") >&2; then
+    failed=1
+  fi
+  if ! (cd "$WORK_DIR" && sha1sum -c "SHA1SUMS-${deb_arch}.txt") >&2; then
+    failed=1
+  fi
+  if ! (cd "$WORK_DIR" && sha256sum -c "SHA256SUMS-${deb_arch}.txt") >&2; then
+    failed=1
+  fi
+  if ! (cd "$WORK_DIR" && sha512sum -c "SHA512SUMS-${deb_arch}.txt") >&2; then
+    failed=1
+  fi
+  if [[ "$failed" == "1" ]]; then
+    fail "Checksum verification failed. One or more downloaded kernel packages do not match the release manifests." "校验值验证失败：一个或多个已下载内核包与发布清单不一致。"
+    warn "Possible causes: broken release assets, mirror/proxy corruption, interrupted download, or tampering." "可能原因：Release 资源错误、镜像/代理污染、下载中断或文件被篡改。"
+    if [[ "${CLOUDTURBO_IGNORE_CHECKSUM:-0}" == "1" ]] || ask_yes_no "Ignore checksum failure and continue installing at your own risk?" "是否忽略校验失败并自担风险继续安装？" "N" "1"; then
+      warn "Continuing despite checksum failure by user request." "已按用户选择忽略校验失败并继续。"
+      return 0
+    fi
+    fail "Installation aborted because checksum verification failed." "已因校验失败中止安装。"
+    exit 1
+  fi
   ok "Checksum verification passed." "校验值验证通过。"
 }
 installed_kernel_versions_from_debs() {

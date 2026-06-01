@@ -35,6 +35,7 @@ bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQw
 - 下载内核包前询问是否使用镜像站；
 - 下载选中的 .deb 内核包；
 - 下载 MD5、SHA1、SHA256、SHA512 校验清单，并在安装前逐包计算和比对；
+- 默认在校验失败时中止，并在用户明确确认风险后才允许继续安装；
 - 安装选中的内核版本；
 - 可选卸载旧内核，并保留当前运行内核与新安装内核；
 - 自动重新生成 GRUB 配置；
