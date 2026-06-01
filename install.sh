@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.2.4"
+SCRIPT_VERSION="1.2.5"
 SCRIPT_RELEASE_DATE="2026-06-01"
 OWNER="LaokeQwQ"
 REPO="CloudTurbo-Kernel"
@@ -305,7 +305,10 @@ boot_kernel_versions_from_debs() {
       [[ -f "$deb" ]] || continue
       dpkg-deb -c "$deb" 2>/dev/null \
         | awk '{print $NF}' \
-        | sed -n 's#^\./boot/vmlinuz-##p'
+        | sed -n \
+            -e 's#^\./boot/vmlinuz-##p' \
+            -e 's#^\./lib/modules/\([^/][^/]*\)/.*#\1#p' \
+            -e 's#^\./usr/lib/modules/\([^/][^/]*\)/.*#\1#p'
     done | sort -u
   )"
   if [[ -n "$versions" ]]; then
@@ -313,6 +316,12 @@ boot_kernel_versions_from_debs() {
   else
     kernel_package_versions_from_debs
   fi
+}
+
+installed_cloudturbo_boot_versions() {
+  find /boot -maxdepth 1 -type f -name 'vmlinuz-*cloudturbo*' -printf '%f\n' 2>/dev/null \
+    | sed 's#^vmlinuz-##' \
+    | sort -Vu
 }
 
 install_downloaded_debs() {
@@ -396,6 +405,8 @@ update_bootloader() {
 check_installed_kernel() {
   local versions="$1"
   local missing=0
+  local detected
+  detected="$(installed_cloudturbo_boot_versions)"
   while IFS= read -r ver; do
     [[ -z "$ver" ]] && continue
     if [[ -f "/boot/vmlinuz-${ver}" ]]; then
@@ -405,6 +416,11 @@ check_installed_kernel() {
       missing=1
     fi
   done <<< "$versions"
+  if [[ "$missing" == "1" && -n "$detected" ]]; then
+    warn "Expected kernel name did not match package metadata, but CloudTurbo kernel image(s) exist under /boot:" "期望的内核文件名与包元数据不一致，但 /boot 下已存在 CloudTurbo 内核镜像："
+    printf '%s\n' "$detected" | sed 's#^#  - /boot/vmlinuz-#' >&2
+    return 0
+  fi
   return "$missing"
 }
 
