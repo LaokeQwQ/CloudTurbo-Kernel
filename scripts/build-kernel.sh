@@ -74,6 +74,7 @@ fi
 make "${make_args[@]}" "$defconfig"
 ./scripts/kconfig/merge_config.sh -m .config "$repo_root/config/cloudturbo-vps.config"
 make "${make_args[@]}" olddefconfig
+make "${make_args[@]}" syncconfig
 bash "$repo_root/scripts/check-kernel-config.sh" .config
 
 kernel_version="$(make -s kernelversion)"
