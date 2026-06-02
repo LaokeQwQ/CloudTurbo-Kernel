@@ -1,6 +1,16 @@
 name: Build Kernel
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".forgejo/workflows/build-kernel.yml"
+      - "config/**"
+      - "scripts/**"
+      - "install.sh"
+      - "README.md"
+      - "README.zh-CN.md"
   workflow_dispatch:
     inputs:
       source:
@@ -20,7 +30,7 @@ on:
         description: Target architecture
         required: true
         type: choice
-        default: x86_64
+        default: both
         options:
           - x86_64
           - arm64
@@ -37,7 +47,7 @@ on:
         description: Publish .deb assets to Forgejo Releases
         required: true
         type: choice
-        default: "false"
+        default: "true"
         options:
           - "true"
           - "false"
@@ -48,7 +58,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: kernel-build-${{ github.ref }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-${{ inputs.arch || 'x86_64' }}
+  group: kernel-build-${{ github.ref }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-${{ inputs.arch || 'both' }}
   cancel-in-progress: false
 
 jobs:
@@ -61,7 +71,7 @@ jobs:
       - id: matrix
         shell: bash
         run: |
-          arch="${{ inputs.arch || 'x86_64' }}"
+          arch="${{ inputs.arch || 'both' }}"
           case "$arch" in
             both) echo 'matrix={"arch":["x86_64","arm64"]}' >> "$GITHUB_OUTPUT" ;;
             x86_64) echo 'matrix={"arch":["x86_64"]}' >> "$GITHUB_OUTPUT" ;;
@@ -141,7 +151,7 @@ jobs:
         run: bash scripts/build-kernel.sh
 
       - name: Generate package checksums
-        if: ${{ inputs.build_debs == 'true' }}
+        if: ${{ (inputs.build_debs || 'true') == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -169,7 +179,7 @@ jobs:
 
       - name: Prepare release metadata
         id: release
-        if: ${{ inputs.publish_release == 'true' && inputs.build_debs == 'true' }}
+        if: ${{ (inputs.publish_release || 'true') == 'true' && (inputs.build_debs || 'true') == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -210,7 +220,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish Forgejo Release
-        if: ${{ inputs.publish_release == 'true' && inputs.build_debs == 'true' }}
+        if: ${{ (inputs.publish_release || 'true') == 'true' && (inputs.build_debs || 'true') == 'true' }}
         shell: bash
         env:
           RELEASE_TOKEN: ${{ forgejo.token }}
