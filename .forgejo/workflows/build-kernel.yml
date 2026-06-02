@@ -1,0 +1,293 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Upstream source
+        required: true
+        type: choice
+        default: xanmod
+        options:
+          - xanmod
+          - debian
+      kernel_ref:
+        description: Upstream branch/ref, or auto
+        required: true
+        type: string
+        default: auto
+      arch:
+        description: Target architecture
+        required: true
+        type: choice
+        default: x86_64
+        options:
+          - x86_64
+          - arm64
+          - both
+      build_debs:
+        description: Produce Debian packages
+        required: true
+        type: choice
+        default: "true"
+        options:
+          - "true"
+          - "false"
+      publish_release:
+        description: Publish .deb assets to Forgejo Releases
+        required: true
+        type: choice
+        default: "false"
+        options:
+          - "true"
+          - "false"
+  schedule:
+    - cron: "23 3 * * 1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kernel-build-${{ github.ref }}-${{ inputs.source || 'xanmod' }}-${{ inputs.kernel_ref || 'auto' }}-${{ inputs.arch || 'x86_64' }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        shell: bash
+        run: |
+          arch="${{ inputs.arch || 'x86_64' }}"
+          case "$arch" in
+            both) echo 'matrix={"arch":["x86_64","arm64"]}' >> "$GITHUB_OUTPUT" ;;
+            x86_64) echo 'matrix={"arch":["x86_64"]}' >> "$GITHUB_OUTPUT" ;;
+            arm64) echo 'matrix={"arch":["arm64"]}' >> "$GITHUB_OUTPUT" ;;
+            *) echo "unsupported arch: $arch" >&2; exit 2 ;;
+          esac
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Checkout CloudTurbo
+        uses: https://data.forgejo.org/actions/checkout@v4
+
+      - name: Resolve upstream for cache key
+        id: upstream
+        shell: bash
+        run: bash scripts/resolve-upstream.sh "${{ inputs.source || 'xanmod' }}" "${{ inputs.kernel_ref || 'auto' }}"
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUDO=()
+          if [[ "$(id -u)" -ne 0 ]]; then
+            SUDO=(sudo)
+          fi
+          "${SUDO[@]}" apt-get update
+          "${SUDO[@]}" apt-get install -y \
+            bc bison build-essential ca-certificates ccache cpio curl debhelper dwarves fakeroot flex git jq \
+            kmod libdw-dev libelf-dev libncurses-dev libssl-dev pahole python3 rsync xz-utils zstd
+          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            "${SUDO[@]}" dpkg --add-architecture arm64
+            "${SUDO[@]}" apt-get update
+            "${SUDO[@]}" apt-get install -y \
+              gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libssl-dev:arm64
+          fi
+
+      - name: Restore arm64 ccache
+        if: ${{ matrix.arch == 'arm64' }}
+        uses: https://data.forgejo.org/actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ steps.upstream.outputs.resolved_sha }}-${{ hashFiles('config/cloudturbo-vps.config', 'scripts/*.sh') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-${{ steps.upstream.outputs.resolved_sha }}-
+            ccache-${{ runner.os }}-${{ matrix.arch }}-${{ inputs.source || 'xanmod' }}-
+            ccache-${{ runner.os }}-${{ matrix.arch }}-
+
+      - name: Configure arm64 ccache
+        if: ${{ matrix.arch == 'arm64' }}
+        shell: bash
+        run: |
+          ccache --set-config=max_size=5G
+          ccache --set-config=compression=true
+          ccache --set-config=compiler_check=content
+          ccache --set-config=sloppiness=time_macros,file_macro,include_file_mtime,include_file_ctime
+          ccache --zero-stats || true
+
+      - name: Build kernel
+        shell: bash
+        env:
+          SOURCE: ${{ inputs.source || 'xanmod' }}
+          KERNEL_REF: ${{ inputs.kernel_ref || 'auto' }}
+          TARGET_ARCH: ${{ matrix.arch }}
+          BUILD_DEBS: ${{ inputs.build_debs || 'true' }}
+          LOCALVERSION: -cloudturbo
+          USE_CCACHE: ${{ matrix.arch == 'arm64' && 'true' || 'false' }}
+          KBUILD_BUILD_TIMESTAMP: "1970-01-01 00:00:00"
+          KBUILD_BUILD_USER: cloudturbo
+          KBUILD_BUILD_HOST: forgejo-actions
+        run: bash scripts/build-kernel.sh
+
+      - name: Generate package checksums
+        if: ${{ inputs.build_debs == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "out/${{ matrix.arch }}/metadata.env"
+          cd "out/${{ matrix.arch }}"
+          shopt -s nullglob
+          debs=( *.deb )
+          if [[ ${#debs[@]} -eq 0 ]]; then
+            echo "No .deb files found for checksum generation" >&2
+            exit 1
+          fi
+          md5sum "${debs[@]}" > "MD5SUMS-${deb_arch}.txt"
+          sha1sum "${debs[@]}" > "SHA1SUMS-${deb_arch}.txt"
+          sha256sum "${debs[@]}" > "SHA256SUMS-${deb_arch}.txt"
+          sha512sum "${debs[@]}" > "SHA512SUMS-${deb_arch}.txt"
+          cat "SHA256SUMS-${deb_arch}.txt"
+
+      - name: Upload artifacts
+        uses: https://data.forgejo.org/actions/upload-artifact@v4
+        with:
+          name: cloudturbo-${{ matrix.arch }}-${{ github.run_id }}
+          path: out/${{ matrix.arch }}/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Prepare release metadata
+        id: release
+        if: ${{ inputs.publish_release == 'true' && inputs.build_debs == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          # shellcheck disable=SC1090
+          source "out/${{ matrix.arch }}/metadata.env"
+          set +a
+          safe_ref="$(printf '%s' "$resolved_ref" | tr '/ :' '---' | tr -cd 'A-Za-z0-9._-')"
+          sha7="${resolved_sha:0:7}"
+          build_version="r${GITHUB_RUN_NUMBER}a${GITHUB_RUN_ATTEMPT}"
+          tag="cloudturbo-${source}-${safe_ref}-${sha7}-${build_version}"
+          title="CloudTurbo Kernel ${source} ${resolved_ref} (${sha7}) ${build_version}"
+          notes="out/${{ matrix.arch }}/release-notes.md"
+          cat > "$notes" <<EOF
+          # ${title}
+
+          - Build version: ${build_version}
+          - Build run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Source: ${source_repo}
+          - Ref: ${resolved_ref}
+          - SHA: ${resolved_sha}
+          - Kernel version: ${kernel_version}
+          - Uploaded by this job: ${{ matrix.arch }} (${deb_arch})
+          - Published architectures: x86_64/amd64 and arm64 when both matrix jobs complete
+          - Local version: ${localversion}
+          - Includes BBRPlus, BBRv3 as \`bbr\`, Docker-ready nftables NAT, bridge netfilter, veth, overlayfs, and UFW/iptables compatibility modules.
+
+          Install with:
+
+          \`\`\`bash
+          bash <(curl -fsSL https://git.laoker.cc/Laoke/CloudTurbo-Kernel/raw/branch/main/install.sh)
+          \`\`\`
+          EOF
+          {
+            echo "tag=$tag"
+            echo "title=$title"
+            echo "notes=$notes"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish Forgejo Release
+        if: ${{ inputs.publish_release == 'true' && inputs.build_debs == 'true' }}
+        shell: bash
+        env:
+          RELEASE_TOKEN: ${{ forgejo.token }}
+        run: |
+          set -euo pipefail
+          set -a
+          # shellcheck disable=SC1090
+          source "out/${{ matrix.arch }}/metadata.env"
+          set +a
+          tag="${{ steps.release.outputs.tag }}"
+          title="${{ steps.release.outputs.title }}"
+          notes="${{ steps.release.outputs.notes }}"
+          api_url="${FORGEJO_API_URL:-${GITHUB_API_URL:-${GITHUB_SERVER_URL%/}/api/v1}}"
+          repo="${FORGEJO_REPOSITORY:-$GITHUB_REPOSITORY}"
+          auth_header="Authorization: token ${RELEASE_TOKEN}"
+          release_json="$(mktemp)"
+          notes_json="$(jq -Rs . < "$notes")"
+
+          if curl -fsSL -H "$auth_header" "$api_url/repos/$repo/releases/tags/$tag" > "$release_json"; then
+            release_id="$(jq -r '.id' "$release_json")"
+            jq -n \
+              --arg tag_name "$tag" \
+              --arg target_commitish "$GITHUB_SHA" \
+              --arg name "$title" \
+              --argjson body "$notes_json" \
+              '{tag_name:$tag_name,target_commitish:$target_commitish,name:$name,body:$body,draft:false,prerelease:false}' \
+              | curl -fsSL -X PATCH -H "$auth_header" -H "Content-Type: application/json" \
+                  --data @- "$api_url/repos/$repo/releases/$release_id" >/dev/null
+          else
+            jq -n \
+              --arg tag_name "$tag" \
+              --arg target_commitish "$GITHUB_SHA" \
+              --arg name "$title" \
+              --argjson body "$notes_json" \
+              '{tag_name:$tag_name,target_commitish:$target_commitish,name:$name,body:$body,draft:false,prerelease:false}' \
+              | curl -fsSL -X POST -H "$auth_header" -H "Content-Type: application/json" \
+                  --data @- "$api_url/repos/$repo/releases" > "$release_json" \
+              || curl -fsSL -H "$auth_header" "$api_url/repos/$repo/releases/tags/$tag" > "$release_json"
+            release_id="$(jq -r '.id' "$release_json")"
+          fi
+
+          while IFS=$'\t' read -r asset_id asset_name; do
+            case "$asset_name" in
+              *_${deb_arch}.deb|MD5SUMS-${deb_arch}.txt|SHA1SUMS-${deb_arch}.txt|SHA256SUMS-${deb_arch}.txt|SHA512SUMS-${deb_arch}.txt|config-${{ matrix.arch }}|metadata-${{ matrix.arch }}.env)
+                curl -fsSL -X DELETE -H "$auth_header" "$api_url/repos/$repo/releases/$release_id/assets/$asset_id" >/dev/null || true
+                ;;
+            esac
+          done < <(curl -fsSL -H "$auth_header" "$api_url/repos/$repo/releases/$release_id/assets" | jq -r '.[] | [.id,.name] | @tsv')
+
+          cp "out/${{ matrix.arch }}/metadata.env" "out/${{ matrix.arch }}/metadata-${{ matrix.arch }}.env"
+          shopt -s nullglob
+          assets=(
+            out/${{ matrix.arch }}/*.deb
+            out/${{ matrix.arch }}/metadata-${{ matrix.arch }}.env
+            out/${{ matrix.arch }}/config-${{ matrix.arch }}
+            out/${{ matrix.arch }}/MD5SUMS-*.txt
+            out/${{ matrix.arch }}/SHA1SUMS-*.txt
+            out/${{ matrix.arch }}/SHA256SUMS-*.txt
+            out/${{ matrix.arch }}/SHA512SUMS-*.txt
+          )
+          for asset in "${assets[@]}"; do
+            name="$(basename "$asset")"
+            curl -fsSL -X POST -H "$auth_header" \
+              -F "attachment=@${asset}" \
+              "$api_url/repos/$repo/releases/$release_id/assets?name=$name" >/dev/null
+          done
+
+          verify_dir="$(mktemp -d)"
+          curl -fsSL -H "$auth_header" "$api_url/repos/$repo/releases/$release_id/assets" \
+            | jq -r --arg deb_arch "$deb_arch" '.[] | select(.name | test("(_"+$deb_arch+"\\.deb$)|(SUMS-"+$deb_arch+"\\.txt$)")) | [.name,.browser_download_url] | @tsv' \
+            | while IFS=$'\t' read -r name url; do
+                curl -fsSL -H "$auth_header" "$url" -o "$verify_dir/$name"
+              done
+          (
+            cd "$verify_dir"
+            md5sum -c "MD5SUMS-${deb_arch}.txt"
+            sha1sum -c "SHA1SUMS-${deb_arch}.txt"
+            sha256sum -c "SHA256SUMS-${deb_arch}.txt"
+            sha512sum -c "SHA512SUMS-${deb_arch}.txt"
+          )

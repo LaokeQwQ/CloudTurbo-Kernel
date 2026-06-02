@@ -124,6 +124,7 @@ CloudTurbo's config fragment is in `config/cloudturbo-vps.config`. It focuses on
 - KVM, virtio, NVMe, common VPS storage and network drivers.
 - TCP BBR/BBRv3, built-in BBRPlus, BBR2 when available, and fq pacing support.
 - nftables NAT, bridge netfilter, veth, overlayfs, and iptables fallback support for Docker/container hosts.
+- UFW/iptables compatibility modules used by common control panels, including limit, REJECT, and IPv6 rt/hl matches.
 - Modern TCP/queue management options.
 - Lower debug overhead for production servers.
 - Core observability features needed for incident response.
