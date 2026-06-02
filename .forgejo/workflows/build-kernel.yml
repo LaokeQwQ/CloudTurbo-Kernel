@@ -62,41 +62,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  plan:
-    name: Plan matrix
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-    steps:
-      - id: matrix
-        shell: bash
-        run: |
-          arch="${{ inputs.arch || 'both' }}"
-          case "$arch" in
-            both) echo 'matrix={"arch":["x86_64","arm64"]}' >> "$GITHUB_OUTPUT" ;;
-            x86_64) echo 'matrix={"arch":["x86_64"]}' >> "$GITHUB_OUTPUT" ;;
-            arm64) echo 'matrix={"arch":["arm64"]}' >> "$GITHUB_OUTPUT" ;;
-            *) echo "unsupported arch: $arch" >&2; exit 2 ;;
-          esac
-
   build:
     name: Build ${{ matrix.arch }}
-    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 480
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+      matrix:
+        arch:
+          - x86_64
+          - arm64
     steps:
+      - name: Select architecture
+        id: arch_filter
+        shell: bash
+        run: |
+          requested="${{ inputs.arch || 'both' }}"
+          case "$requested:${{ matrix.arch }}" in
+            both:*|x86_64:x86_64|arm64:arm64)
+              echo "enabled=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - name: Checkout CloudTurbo
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' }}
         uses: https://data.forgejo.org/actions/checkout@v4
 
       - name: Resolve upstream for cache key
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' }}
         id: upstream
         shell: bash
         run: bash scripts/resolve-upstream.sh "${{ inputs.source || 'xanmod' }}" "${{ inputs.kernel_ref || 'auto' }}"
 
       - name: Install build dependencies
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -116,7 +118,7 @@ jobs:
           fi
 
       - name: Restore arm64 ccache
-        if: ${{ matrix.arch == 'arm64' }}
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' && matrix.arch == 'arm64' }}
         uses: https://data.forgejo.org/actions/cache@v4
         with:
           path: ~/.cache/ccache
@@ -127,7 +129,7 @@ jobs:
             ccache-${{ runner.os }}-${{ matrix.arch }}-
 
       - name: Configure arm64 ccache
-        if: ${{ matrix.arch == 'arm64' }}
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' && matrix.arch == 'arm64' }}
         shell: bash
         run: |
           ccache --set-config=max_size=5G
@@ -137,6 +139,7 @@ jobs:
           ccache --zero-stats || true
 
       - name: Build kernel
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' }}
         shell: bash
         env:
           SOURCE: ${{ inputs.source || 'xanmod' }}
@@ -151,7 +154,7 @@ jobs:
         run: bash scripts/build-kernel.sh
 
       - name: Generate package checksums
-        if: ${{ (inputs.build_debs || 'true') == 'true' }}
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' && (inputs.build_debs || 'true') == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -170,6 +173,7 @@ jobs:
           cat "SHA256SUMS-${deb_arch}.txt"
 
       - name: Upload artifacts
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' }}
         uses: https://data.forgejo.org/actions/upload-artifact@v4
         with:
           name: cloudturbo-${{ matrix.arch }}-${{ github.run_id }}
@@ -179,7 +183,7 @@ jobs:
 
       - name: Prepare release metadata
         id: release
-        if: ${{ (inputs.publish_release || 'true') == 'true' && (inputs.build_debs || 'true') == 'true' }}
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' && (inputs.publish_release || 'true') == 'true' && (inputs.build_debs || 'true') == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -220,7 +224,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish Forgejo Release
-        if: ${{ (inputs.publish_release || 'true') == 'true' && (inputs.build_debs || 'true') == 'true' }}
+        if: ${{ steps.arch_filter.outputs.enabled == 'true' && (inputs.publish_release || 'true') == 'true' && (inputs.build_debs || 'true') == 'true' }}
         shell: bash
         env:
           RELEASE_TOKEN: ${{ forgejo.token }}
