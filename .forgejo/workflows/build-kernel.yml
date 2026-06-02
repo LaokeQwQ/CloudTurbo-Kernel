@@ -106,8 +106,8 @@ jobs:
           if [[ "$(id -u)" -ne 0 ]]; then
             SUDO=(sudo)
           fi
-          debian_mirror="${DEBIAN_MIRROR:-http://mirrors.aliyun.com/debian}"
-          security_mirror="${DEBIAN_SECURITY_MIRROR:-http://mirrors.aliyun.com/debian-security}"
+          debian_mirror="${DEBIAN_MIRROR:-http://mirrors.ustc.edu.cn/debian}"
+          security_mirror="${DEBIAN_SECURITY_MIRROR:-http://mirrors.ustc.edu.cn/debian-security}"
           "${SUDO[@]}" sh -c "printf '%s\n' 'Acquire::Retries \"5\";' 'Acquire::http::Timeout \"30\";' > /etc/apt/apt.conf.d/80-cloudturbo-retries"
           if [[ -d /etc/apt/sources.list.d ]]; then
             "${SUDO[@]}" find /etc/apt/sources.list.d -type f \( -name '*.sources' -o -name '*.list' \) -exec sed -i \
