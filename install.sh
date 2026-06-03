@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_VERSION="1.2.6"
-SCRIPT_RELEASE_DATE="2026-06-01"
-OWNER="LaokeQwQ"
-REPO="CloudTurbo-Kernel"
-API_BASE="https://api.github.com/repos/${OWNER}/${REPO}"
-RAW_INSTALL_URL="https://raw.githubusercontent.com/${OWNER}/${REPO}/main/install.sh"
+SCRIPT_VERSION="1.3.0"
+SCRIPT_RELEASE_DATE="2026-06-03"
+GITHUB_OWNER="LaokeQwQ"
+GITHUB_REPO="CloudTurbo-Kernel"
+FORGEJO_OWNER="Laoke"
+FORGEJO_REPO="CloudTurbo-Kernel"
+FORGEJO_BASE_URL="https://git.laoker.cc"
+API_BASE=""
+RAW_INSTALL_URL=""
+GIT_SOURCE="${CLOUDTURBO_SOURCE:-}"
+GIT_SOURCE_LABEL=""
 SELF_INSTALL_PATH="/usr/local/bin/cloudturbo-kernel"
 WORK_DIR="${WORK_DIR:-/tmp/cloudturbo-kernel-installer}"
 SYSCTL_FILE="/etc/sysctl.d/99-cloudturbo-tcp.conf"
 DEFAULT_MIRROR_PREFIX="https://gh-proxy.org/"
+MIRROR_PREFIX="${CLOUDTURBO_GITHUB_MIRROR_PREFIX:-}"
 LANGUAGE="${CLOUDTURBO_LANG:-}"
 
 red() { printf '\033[31m%s\033[0m\n' "$*"; }
@@ -118,24 +124,111 @@ ask_yes_no() {
   [[ "$answer" =~ ^[Yy]$ ]]
 }
 
-configure_mirror() {
-  MIRROR_PREFIX=""
+normalize_git_source() {
+  local source="${1:-}"
+  source="${source,,}"
+  case "$source" in
+    "" ) return 1 ;;
+    1|forgejo|gitlaoker|git-laoker|git.laoker.cc|laoker|self-hosted|selfhosted) printf '%s\n' "forgejo" ;;
+    2|github|gh) printf '%s\n' "github" ;;
+    3|github-mirror|github_proxy|github-proxy|gh-mirror|gh_proxy|gh-proxy|mirror) printf '%s\n' "github-mirror" ;;
+    * ) return 1 ;;
+  esac
+}
+
+apply_git_source() {
+  local source="$1"
+  case "$source" in
+    forgejo)
+      GIT_SOURCE="forgejo"
+      GIT_SOURCE_LABEL="git.laoker.cc"
+      API_BASE="${FORGEJO_BASE_URL}/api/v1/repos/${FORGEJO_OWNER}/${FORGEJO_REPO}"
+      RAW_INSTALL_URL="${FORGEJO_BASE_URL}/${FORGEJO_OWNER}/${FORGEJO_REPO}/raw/branch/main/install.sh"
+      MIRROR_PREFIX=""
+      ;;
+    github)
+      GIT_SOURCE="github"
+      GIT_SOURCE_LABEL="GitHub"
+      API_BASE="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"
+      RAW_INSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/install.sh"
+      MIRROR_PREFIX=""
+      ;;
+    github-mirror)
+      GIT_SOURCE="github-mirror"
+      GIT_SOURCE_LABEL="GitHub mirror"
+      API_BASE="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"
+      RAW_INSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/install.sh"
+      MIRROR_PREFIX="${MIRROR_PREFIX:-$DEFAULT_MIRROR_PREFIX}"
+      MIRROR_PREFIX="${MIRROR_PREFIX%/}/"
+      ;;
+    *)
+      fail "Unsupported Git source: ${source}" "不支持的 Git 源：${source}"
+      exit 1
+      ;;
+  esac
+}
+
+choose_git_source() {
+  if [[ -n "${API_BASE:-}" && -n "${RAW_INSTALL_URL:-}" ]]; then
+    return 0
+  fi
+
+  local normalized choice
+  if normalized="$(normalize_git_source "${GIT_SOURCE:-}")"; then
+    apply_git_source "$normalized"
+    return 0
+  elif [[ -n "${GIT_SOURCE:-}" ]]; then
+    fail "Invalid CLOUDTURBO_SOURCE: ${GIT_SOURCE}. Use forgejo, github, or github-mirror." "CLOUDTURBO_SOURCE 无效：${GIT_SOURCE}。请使用 forgejo、github 或 github-mirror。"
+    exit 1
+  fi
+
+  if [[ ! -t 0 ]]; then
+    apply_git_source "forgejo"
+    return 0
+  fi
+
   clear_interactive
   header
-  printf '\n'
-  if ask_yes_no "Use a GitHub mirror/proxy before downloading assets?" "下载前是否使用 GitHub 镜像/代理？" "N" "0"; then
-    read -r -p "$(msg 'Mirror prefix' '镜像前缀') [${DEFAULT_MIRROR_PREFIX}] " MIRROR_PREFIX || true
+  printf '\n' >&2
+  if is_zh; then
+    cat >&2 <<'EOF'
+请选择下载/更新源
+  1) git.laoker.cc 自建源（推荐）
+  2) GitHub 原站
+  3) GitHub 镜像站
+EOF
+  else
+    cat >&2 <<'EOF'
+Select download/update source
+  1) git.laoker.cc self-hosted source (Recommended)
+  2) GitHub
+  3) GitHub mirror/proxy
+EOF
+  fi
+  printf '%s' "$(msg 'Choice [1]' '选择 [1]'): " >&2
+  read -r choice || true
+  choice="${choice:-1}"
+  if ! normalized="$(normalize_git_source "$choice")"; then
+    warn "Invalid selection, using git.laoker.cc." "选择无效，使用 git.laoker.cc。"
+    normalized="forgejo"
+  fi
+  apply_git_source "$normalized"
+  if [[ "$GIT_SOURCE" == "github-mirror" ]]; then
+    printf '%s' "$(msg 'Mirror prefix' '镜像前缀') [${MIRROR_PREFIX:-$DEFAULT_MIRROR_PREFIX}] " >&2
+    read -r MIRROR_PREFIX || true
     MIRROR_PREFIX="${MIRROR_PREFIX:-$DEFAULT_MIRROR_PREFIX}"
     MIRROR_PREFIX="${MIRROR_PREFIX%/}/"
-    warn "Download mirror enabled: ${MIRROR_PREFIX}<original-url>" "已启用下载镜像：${MIRROR_PREFIX}<原始URL>"
+    warn "GitHub mirror enabled: ${MIRROR_PREFIX}<original-url>" "已启用 GitHub 镜像：${MIRROR_PREFIX}<原始URL>"
     warn "Example: ${MIRROR_PREFIX}${RAW_INSTALL_URL}" "示例：${MIRROR_PREFIX}${RAW_INSTALL_URL}"
     pause_prompt
+  else
+    ok "Selected source: ${GIT_SOURCE_LABEL}" "已选择源：${GIT_SOURCE_LABEL}"
   fi
 }
 
-mirror_url() {
+source_url() {
   local url="$1"
-  if [[ -n "${MIRROR_PREFIX:-}" ]]; then
+  if [[ "${GIT_SOURCE:-}" == "github-mirror" && -n "${MIRROR_PREFIX:-}" ]]; then
     printf '%s%s\n' "$MIRROR_PREFIX" "$url"
   else
     printf '%s\n' "$url"
@@ -144,18 +237,22 @@ mirror_url() {
 
 curl_json() {
   local url="$1"
-  curl -fsSL -H "Accept: application/vnd.github+json" "$url"
+  local final_url
+  choose_git_source
+  final_url="$(source_url "$url")"
+  curl -fsSL -H "Accept: application/json" "$final_url"
 }
 
 list_releases() {
   local deb_arch="$1"
-  curl_json "${API_BASE}/releases?per_page=100" | python3 -c '
+  choose_git_source
+  curl_json "${API_BASE}/releases?per_page=100&limit=100" | python3 -c '
 import json, sys
 arch = sys.argv[1]
 try:
     releases = json.load(sys.stdin)
 except Exception as exc:
-    print(f"Failed to parse GitHub releases JSON: {exc}", file=sys.stderr)
+    print(f"Failed to parse releases JSON: {exc}", file=sys.stderr)
     sys.exit(2)
 rows = []
 for rel in releases:
@@ -185,12 +282,12 @@ select_release() {
   header
   printf '\n' >&2
   if [[ $rc -ne 0 || -z "$release_table" ]]; then
-    fail "No compiled CloudTurbo Kernel release assets were found for ${deb_arch}." "没有找到适用于 ${deb_arch} 的已编译 CloudTurbo Kernel 版本。"
-    warn "Build one first from GitHub Actions: Build Kernel -> build_debs=true -> publish_release=true." "请先在 GitHub Actions 中构建：Build Kernel -> build_debs=true -> publish_release=true。"
+    fail "No compiled CloudTurbo Kernel release assets were found for ${deb_arch} from ${GIT_SOURCE_LABEL:-selected source}." "没有从 ${GIT_SOURCE_LABEL:-所选源} 找到适用于 ${deb_arch} 的已编译 CloudTurbo Kernel 版本。"
+    warn "Build one first from Actions: Build Kernel -> build_debs=true -> publish_release=true." "请先在 Actions 中构建：Build Kernel -> build_debs=true -> publish_release=true。"
     exit 1
   fi
 
-  info "Available CloudTurbo Kernel releases for ${deb_arch}:" "适用于 ${deb_arch} 的 CloudTurbo Kernel 已编译版本："
+  info "Available CloudTurbo Kernel releases for ${deb_arch} from ${GIT_SOURCE_LABEL}:" "来自 ${GIT_SOURCE_LABEL}、适用于 ${deb_arch} 的 CloudTurbo Kernel 已编译版本："
   printf '%s\n' "$release_table" | awk -F '\t' '{printf "  %2s) %-44s %s assets  %s\n", $1, $2, $5, $4}' >&2
   while true; do
     printf '%s' "$(msg 'Select a release number' '请选择版本编号'): " >&2
@@ -208,11 +305,11 @@ download_release_assets() {
   local deb_arch="$2"
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
-  configure_mirror
+  choose_git_source
   clear_interactive
   header
   printf '\n'
-  info "Fetching release metadata: ${tag}" "正在获取版本元数据：${tag}"
+  info "Fetching release metadata from ${GIT_SOURCE_LABEL}: ${tag}" "正在从 ${GIT_SOURCE_LABEL} 获取版本元数据：${tag}"
   curl_json "${API_BASE}/releases/tags/${tag}" | python3 -c '
 import json, sys
 arch = sys.argv[1]
@@ -240,7 +337,7 @@ for asset in rel.get("assets", []):
   while IFS=$'\t' read -r name url; do
     [[ -n "$name" && -n "$url" ]] || continue
     local final_url
-    final_url="$(mirror_url "$url")"
+    final_url="$(source_url "$url")"
     printf '  - %s\n' "$name" >&2
     curl -fL --retry 5 --retry-delay 2 -o "${WORK_DIR}/${name}" "$final_url"
   done < "${WORK_DIR}/assets.tsv"
@@ -614,12 +711,12 @@ self_update() {
   clear_interactive
   header
   printf '\n'
-  configure_mirror
+  choose_git_source
   mkdir -p "$WORK_DIR"
   local tmp target final_url meta remote_version remote_date
   tmp="${WORK_DIR}/install.sh.new"
-  final_url="$(mirror_url "$RAW_INSTALL_URL")"
-  info "Downloading latest installer script..." "正在下载最新安装脚本..."
+  final_url="$(source_url "$RAW_INSTALL_URL")"
+  info "Downloading latest installer script from ${GIT_SOURCE_LABEL}..." "正在从 ${GIT_SOURCE_LABEL} 下载最新安装脚本..."
   curl -fL --retry 5 --retry-delay 2 -o "$tmp" "$final_url"
   chmod +x "$tmp"
   meta="$(extract_remote_meta "$tmp")"
@@ -652,7 +749,7 @@ menu() {
       cat <<'EOF'
 
 CloudTurbo Kernel 安装器
-  1) 从 GitHub Releases 安装/升级 CloudTurbo Kernel
+  1) 从可选源 Releases 安装/升级 CloudTurbo Kernel
   2) 重启后启用 BBR
   3) 重启后启用 BBRPlus
   4) 重启后启用 BBR2
@@ -667,7 +764,7 @@ EOF
       cat <<'EOF'
 
 CloudTurbo Kernel installer
-  1) Install/upgrade CloudTurbo Kernel from GitHub Releases
+  1) Install/upgrade CloudTurbo Kernel from selectable Releases source
   2) Enable BBR after reboot
   3) Enable BBRPlus after reboot
   4) Enable BBR2 after reboot

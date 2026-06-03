@@ -8,9 +8,6 @@ on:
       - ".forgejo/workflows/build-kernel.yml"
       - "config/**"
       - "scripts/**"
-      - "install.sh"
-      - "README.md"
-      - "README.zh-CN.md"
   workflow_dispatch:
     inputs:
       source:

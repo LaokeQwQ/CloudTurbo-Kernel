@@ -19,20 +19,21 @@ The repository intentionally stays small: it does not vendor a full kernel tree.
 Run the installer on a Debian/Ubuntu VPS as root:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
+bash <(curl -fsSL https://git.laoker.cc/Laoke/CloudTurbo-Kernel/raw/branch/main/install.sh)
 ```
 
-If GitHub access is slow, you can fetch the installer itself through a mirror/proxy:
+GitHub raw and GitHub mirror/proxy entry points are also supported:
 
 ```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
 bash <(curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/LaokeQwQ/CloudTurbo-Kernel/main/install.sh)
 ```
 
-At startup the installer shows its script version and release date, clears the screen before each interactive step, and lets you choose English or Simplified Chinese. You can also skip the prompt with `CLOUDTURBO_LANG=zh` or `CLOUDTURBO_LANG=en`. The installer supports self-update from the main branch. It will:
+At startup the installer shows its script version and release date, clears the screen before each interactive step, and lets you choose English or Simplified Chinese. It also lets you choose the release/update source: the self-hosted `git.laoker.cc`, GitHub, or a GitHub mirror/proxy. You can skip prompts with `CLOUDTURBO_LANG=zh|en` and `CLOUDTURBO_SOURCE=forgejo|github|github-mirror`. The installer supports self-update from the selected source. It will:
 
-- list compiled CloudTurbo Kernel versions from published, non-prerelease GitHub Releases;
+- list compiled CloudTurbo Kernel versions from published, non-prerelease releases on the selected source;
 - detect the current architecture (`amd64` or `arm64`);
-- ask whether to use a mirror before downloading packages;
+- use the selected source consistently for release metadata, package downloads, and self-update;
 - download the selected .deb kernel packages;
 - download MD5, SHA1, SHA256, and SHA512 checksum manifests and verify package checksums before installation;
 - stop on checksum mismatch by default, with an explicit high-risk confirmation prompt if you choose to continue anyway;
@@ -54,6 +55,11 @@ sudo bash install.sh
 # Force Simplified Chinese UI
 CLOUDTURBO_LANG=zh sudo -E bash install.sh
 
+# Force a source without the interactive prompt
+CLOUDTURBO_SOURCE=forgejo sudo -E bash install.sh install
+CLOUDTURBO_SOURCE=github sudo -E bash install.sh install
+CLOUDTURBO_SOURCE=github-mirror sudo -E bash install.sh install
+
 # Install/upgrade kernel from published releases
 sudo bash install.sh install
 
@@ -72,7 +78,13 @@ sudo bash install.sh status
 sudo bash install.sh self-update
 ```
 
-Mirror behavior: before package download, the installer asks whether to use a mirror prefix. If you answer yes and keep the default, release asset URLs are rewritten like this:
+Source behavior:
+
+- `forgejo` uses the self-hosted source at `https://git.laoker.cc/Laoke/CloudTurbo-Kernel`.
+- `github` uses GitHub API, GitHub Releases, and raw.githubusercontent.com directly.
+- `github-mirror` uses GitHub metadata and assets through a mirror prefix. The default prefix is `https://gh-proxy.org/`, and it can be overridden with `CLOUDTURBO_GITHUB_MIRROR_PREFIX`.
+
+When `github-mirror` is selected, GitHub URLs are rewritten like this:
 
 ```text
 https://github.com/LaokeQwQ/CloudTurbo-Kernel/releases/download/...
