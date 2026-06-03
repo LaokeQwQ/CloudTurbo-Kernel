@@ -3,6 +3,7 @@ set -euo pipefail
 
 kernel_dir="${1:-.}"
 bbrplus_patch_url="${BBRPLUS_PATCH_URL:-https://raw.githubusercontent.com/UJX6N/bbrplus-6.x_stable/main/convert_official_linux-6.9.x_src_to_bbrplus.patch}"
+bbrplus_patch_fallback_url="${BBRPLUS_PATCH_FALLBACK_URL:-https://gh-proxy.org/https://raw.githubusercontent.com/UJX6N/bbrplus-6.x_stable/main/convert_official_linux-6.9.x_src_to_bbrplus.patch}"
 
 cd "$kernel_dir"
 
@@ -53,7 +54,20 @@ tmp_patch="$(mktemp)"
 tmp_c="$(mktemp)"
 trap 'rm -f "$tmp_patch" "$tmp_c"' EXIT
 
-curl -fsSL "$bbrplus_patch_url" -o "$tmp_patch"
+download_patch() {
+  local url
+  for url in "$bbrplus_patch_url" "$bbrplus_patch_fallback_url"; do
+    [[ -n "$url" ]] || continue
+    echo "CloudTurbo TCP CC integration: downloading BBRPlus patch from $url"
+    if curl -fL --retry 5 --retry-all-errors --connect-timeout 20 --max-time 180 "$url" -o "$tmp_patch"; then
+      return 0
+    fi
+  done
+  echo "failed to download BBRPlus patch from configured URLs" >&2
+  return 1
+}
+
+download_patch
 
 awk '
   /^diff .* b\/net\/ipv4\/tcp_bbrplus\.c$/ { in_file = 1; next }

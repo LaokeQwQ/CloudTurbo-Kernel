@@ -188,15 +188,6 @@ jobs:
           sha512sum "${debs[@]}" > "SHA512SUMS-${deb_arch}.txt"
           cat "SHA256SUMS-${deb_arch}.txt"
 
-      - name: Upload artifacts
-        if: ${{ steps.arch_filter.outputs.enabled == 'true' }}
-        uses: https://data.forgejo.org/actions/upload-artifact@v4
-        with:
-          name: cloudturbo-${{ matrix.arch }}-${{ github.run_id }}
-          path: out/${{ matrix.arch }}/
-          if-no-files-found: error
-          retention-days: 14
-
       - name: Prepare release metadata
         id: release
         if: ${{ steps.arch_filter.outputs.enabled == 'true' && (inputs.publish_release || 'true') == 'true' && (inputs.build_debs || 'true') == 'true' }}
