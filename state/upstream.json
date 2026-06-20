@@ -3,12 +3,12 @@
     "repo": "https://gitlab.com/xanmod/linux.git",
     "ref": "auto",
     "resolved_ref": "7.1",
-    "sha": "8cd9520d35a6c38db6567e97dd93b1f11f185dc6"
+    "sha": "b06adce63b8996605b3051e28f873dab9f6a2eb1"
   },
   "debian": {
     "repo": "https://salsa.debian.org/kernel-team/linux.git",
     "ref": "debian/latest",
     "resolved_ref": "debian/latest",
-    "sha": "3cc44ee2d4083595e51f5e466bc7889cc04c418a"
+    "sha": "19e11bd2f2609851c0ce81f3bd307eb9008521dd"
   }
 }
