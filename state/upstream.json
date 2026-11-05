@@ -9,6 +9,6 @@
     "repo": "https://salsa.debian.org/kernel-team/linux.git",
     "ref": "debian/latest",
     "resolved_ref": "debian/latest",
-    "sha": "b467f717386bc02e57c87c096d37a3436a29ab04"
+    "sha": "eb90861bd2d18cf7d570d47a22081f14a466e405"
   }
 }
