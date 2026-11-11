@@ -3,7 +3,7 @@
     "repo": "https://gitlab.com/xanmod/linux.git",
     "ref": "auto",
     "resolved_ref": "7.3",
-    "sha": "2ef81154eee5e08d29749ce752a39fb10b8426d7"
+    "sha": "98ed74f6f890c99308fe595a9aa61d139cb58495"
   },
   "debian": {
     "repo": "https://salsa.debian.org/kernel-team/linux.git",
